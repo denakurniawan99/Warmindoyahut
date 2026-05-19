@@ -465,12 +465,20 @@ var DEFAULT_KARYAWAN = [
   {id:'k5',nama:'Rizky Firmansyah',pin:'5555'},
 ];
 var DEFAULT_MENU = [
-  {id:'m1',nama:'Nasi Goreng',harga:12000},{id:'m2',nama:'Mie Goreng',harga:11000},
-  {id:'m3',nama:'Nasi Kuning',harga:13000},{id:'m4',nama:'Nasi Pecel',harga:14000},
-  {id:'m5',nama:'Soto Ayam + Nasi',harga:16000},{id:'m6',nama:'Gado-gado',harga:15000},
+  {id:'m1',nama:'Nasi Goreng',harga:12000,kategori:'Nasi'},{id:'m2',nama:'Mie Goreng',harga:11000,kategori:'Mie'},
+  {id:'m3',nama:'Nasi Kuning',harga:13000,kategori:'Nasi'},{id:'m4',nama:'Nasi Pecel',harga:14000,kategori:'Nasi'},
+  {id:'m5',nama:'Soto Ayam + Nasi',harga:16000,kategori:'Sup'},{id:'m6',nama:'Gado-gado',harga:15000,kategori:'Sayur'},
 ];
-var EMOJI_MAP = {'Nasi':'🍚','Mie':'🍜','Soto':'🍲','Gado':'🥙','Pecel':'🥗','Ayam':'🍗','Bakso':'🍡','Sate':'🍢','Ikan':'🐟','Tempe':'🫘','Tahu':'🧊'};
+var KATEGORI_LIST = ['Semua','Nasi','Mie','Sup','Lauk','Sayur','Minuman','Snack','Lainnya'];
+var EMOJI_MAP = {'Nasi':'🍚','Mie':'🍜','Soto':'🍲','Gado':'🥙','Pecel':'🥗','Ayam':'🍗','Bakso':'🍡','Sate':'🍢','Ikan':'🐟','Tempe':'🫘','Tahu':'🧊','Sup':'🍲','Lauk':'🍖','Sayur':'🥬','Minum':'🥤','Snack':'🍘'};
 function getEmoji(n){for(var k in EMOJI_MAP){if(n.indexOf(k)!==-1)return EMOJI_MAP[k];}return'🍽️';}
+
+// ─── FILTER STATE KARYAWAN ───
+var filterKategoriKaryawan='Semua';
+var filterHargaKaryawan='semua'; // 'semua','dibawah','diatas','custom'
+var filterHargaMin=0;
+var filterHargaMax=999999;
+var filterSearchKaryawan='';
 
 // ─────────────────────────────────────────────────────────
 //  STATE
@@ -699,7 +707,37 @@ function renderKaryawan(){
       :'';
     formHtml=addMoreLabel
       +'<div class="section-label">🍽️ Menu Hari Ini</div>'
-      +'<div style="display:grid;gap:10px;margin-bottom:12px" id="k-menu-grid">'+renderMenuCards(menuHariIni)+'</div>'
+      +'<div id="k-filter-wrap" style="margin-bottom:10px">'
+      // Search box
+      +'<div style="position:relative;margin-bottom:8px">'
+      +'<span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none">🔍</span>'
+      +'<input type="text" id="k-search-input" placeholder="Cari nama menu..." value="'+filterSearchKaryawan+'"'
+      +' oninput="setFilterSearch(this.value)"'
+      +' style="padding-left:36px;font-size:13px;border-radius:99px;border:1.5px solid var(--border);background:#fff">'
+      +'</div>'
+      // Filter harga
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px" id="k-harga-chips">'
+      +[{v:'semua',l:'Semua Harga'},{v:'dibawah',l:'≤ Rp '+BUDGET.toLocaleString('id')},{v:'diatas',l:'> Rp '+BUDGET.toLocaleString('id')},{v:'custom',l:'Range Harga'}].map(function(f){
+        return'<div class="chip'+(filterHargaKaryawan===f.v?' active':'')+'" onclick="setFilterHargaKaryawan(\''+f.v+'\')" style="font-size:12px;padding:6px 12px">'+f.l+'</div>';
+      }).join('')
+      +'</div>'
+      // Custom range inputs (shown only when filterHargaKaryawan==='custom')
+      +'<div id="k-range-wrap" style="display:'+(filterHargaKaryawan==='custom'?'flex':'none')+';gap:8px;align-items:center;margin-bottom:8px">'
+      +'<div style="flex:1"><div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:3px">MIN (Rp)</div>'
+      +'<input type="number" id="k-harga-min" placeholder="0" value="'+(filterHargaMin||'')+'" oninput="applyCustomRange()" inputmode="numeric" style="font-size:13px;border-radius:10px"></div>'
+      +'<div style="color:var(--text3);font-size:16px;padding-top:14px">→</div>'
+      +'<div style="flex:1"><div style="font-size:10px;font-weight:800;color:var(--text3);margin-bottom:3px">MAX (Rp)</div>'
+      +'<input type="number" id="k-harga-max" placeholder="999999" value="'+(filterHargaMax===999999?'':filterHargaMax)+'" oninput="applyCustomRange()" inputmode="numeric" style="font-size:13px;border-radius:10px"></div>'
+      +'</div>'
+      // Filter Kategori chips
+      +'<div class="chips" id="k-chips-kategori" style="margin-bottom:2px">'
+      +KATEGORI_LIST.map(function(kat){
+        if(kat!=='Semua'){var hasMenu=menuHariIni.some(function(m){return (m.kategori||'Lainnya')===kat;});if(!hasMenu)return'';}
+        return'<div class="chip'+(filterKategoriKaryawan===kat?' active':'')+'" onclick="setFilterKategoriKaryawan(\''+kat+'\')">'+kat+'</div>';
+      }).join('')
+      +'</div>'
+      +'</div>'
+      +'<div style="display:grid;gap:10px;margin-bottom:12px" id="k-menu-grid">'+renderMenuCards(getMenuFiltered(menuHariIni))+'</div>'
       +'<div id="k-ringkasan" style="display:none">'
       +'<div class="section-label">🛒 Ringkasan Pesanan Baru</div>'
       +'<div class="card">'
@@ -763,6 +801,9 @@ function renderRiwayatKaryawan(){
 }
 
 function renderMenuCards(menuList){
+  if(menuList.length===0){
+    return'<div class="empty-state" style="padding:20px 0"><div class="empty-icon">🔍</div><p style="font-size:13px;font-weight:600">Tidak ada menu yang cocok dengan filter</p><button class="btn secondary" style="margin-top:8px;width:auto;padding:7px 16px;font-size:12px" onclick="filterKategoriKaryawan=\'Semua\';filterHargaKaryawan=\'semua\';filterSearchKaryawan=\'\';filterHargaMin=0;filterHargaMax=999999;renderKaryawan()">Reset Filter</button></div>';
+  }
   return menuList.map(function(m){
     var over=m.harga-BUDGET;
     var tag=over>0?'<span class="menu-card-tag tag-over">+'+rp(over)+' kamu bayar</span>':'<span class="menu-card-tag tag-free">✓ Gratis penuh</span>';
@@ -782,6 +823,65 @@ function renderMenuCards(menuList){
 
 function tambahItem(mid){ubahQty(mid,1);}
 function scrollToCart(){var el=document.getElementById('k-ringkasan');if(el)el.scrollIntoView({behavior:'smooth'});}
+
+// ─── FILTER MENU KARYAWAN ───
+function getMenuFiltered(menuList){
+  var search=filterSearchKaryawan.toLowerCase().trim();
+  return menuList.filter(function(m){
+    // Search
+    if(search&&m.nama.toLowerCase().indexOf(search)===-1)return false;
+    // Kategori
+    var katOk=filterKategoriKaryawan==='Semua'||(m.kategori||'Lainnya')===filterKategoriKaryawan;
+    if(!katOk)return false;
+    // Harga
+    if(filterHargaKaryawan==='dibawah'&&m.harga>BUDGET)return false;
+    if(filterHargaKaryawan==='diatas'&&m.harga<=BUDGET)return false;
+    if(filterHargaKaryawan==='custom'){
+      var min=filterHargaMin||0;
+      var max=filterHargaMax||999999;
+      if(m.harga<min||m.harga>max)return false;
+    }
+    return true;
+  });
+}
+function _refreshMenuGrid(){
+  var grid=document.getElementById('k-menu-grid');
+  if(grid){grid.innerHTML=renderMenuCards(getMenuFiltered(getMenuHariIni()));}
+  Object.keys(keranjang).forEach(function(mid){
+    var qty=keranjang[mid]||0;
+    var qnum=document.getElementById('qnum-'+mid);var qminus=document.getElementById('qminus-'+mid);
+    if(qnum){qnum.textContent=qty;qnum.style.display=qty>0?'block':'none';}
+    if(qminus){qminus.style.display=qty>0?'flex':'none';}
+  });
+}
+function setFilterSearch(val){
+  filterSearchKaryawan=val;
+  _refreshMenuGrid();
+}
+function setFilterKategoriKaryawan(kat){
+  filterKategoriKaryawan=kat;
+  _refreshMenuGrid();
+  document.querySelectorAll('#k-chips-kategori .chip').forEach(function(c){c.classList.toggle('active',c.textContent===kat);});
+}
+function setFilterHargaKaryawan(fv){
+  filterHargaKaryawan=fv;
+  // Show/hide custom range
+  var rw=document.getElementById('k-range-wrap');
+  if(rw)rw.style.display=fv==='custom'?'flex':'none';
+  if(fv!=='custom'){filterHargaMin=0;filterHargaMax=999999;}
+  _refreshMenuGrid();
+  document.querySelectorAll('#k-harga-chips .chip').forEach(function(c,i){
+    var vals=['semua','dibawah','diatas','custom'];
+    c.classList.toggle('active',vals[i]===fv);
+  });
+}
+function applyCustomRange(){
+  var minEl=document.getElementById('k-harga-min');
+  var maxEl=document.getElementById('k-harga-max');
+  filterHargaMin=minEl?parseInt(minEl.value)||0:0;
+  filterHargaMax=maxEl?(parseInt(maxEl.value)||999999):999999;
+  _refreshMenuGrid();
+}
 function ubahQty(mid,delta){
   keranjang[mid]=Math.max(0,(keranjang[mid]||0)+delta);
   if(keranjang[mid]===0)delete keranjang[mid];
@@ -1193,10 +1293,31 @@ function renderAdminTab(tab){
   if(tab==='menu'){
     var menuItems=cache.menu.length===0
       ?'<div class="empty-state" style="padding:24px 0"><div class="empty-icon">😅</div><p style="font-size:14px;font-weight:600">Belum ada menu</p></div>'
-      :cache.menu.map(function(m){var r=getRatingMenu(m.nama);var rH=r?'<div style="font-size:11px;color:var(--yellow)">'+renderStars(r.avg)+' '+r.avg+' ('+r.count+' ulasan)</div>':'<div style="font-size:11px;color:var(--text3)">Belum ada rating</div>';return'<div style="background:#fff;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow)"><div style="font-size:26px;width:44px;height:44px;background:var(--orange-light);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+getEmoji(m.nama)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+m.nama+'</div><div style="font-size:13px;font-weight:600;color:'+(m.harga>BUDGET?'var(--red)':'var(--orange)')+'">'+rp(m.harga)+(m.harga>BUDGET?' ⚠️':'')+'</div>'+rH+'</div><button class="btn danger sm" onclick="hapusMenu(\''+m.id+'\')">Hapus</button></div>';}).join('');
+      :cache.menu.map(function(m){var r=getRatingMenu(m.nama);var rH=r?'<div style="font-size:11px;color:var(--yellow)">'+renderStars(r.avg)+' '+r.avg+' ('+r.count+' ulasan)</div>':'<div style="font-size:11px;color:var(--text3)">Belum ada rating</div>';return'<div style="background:#fff;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow)"><div style="font-size:26px;width:44px;height:44px;background:var(--orange-light);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0">'+getEmoji(m.nama)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+m.nama+'</div><div style="font-size:12px;color:var(--text3);margin-top:1px">'+('📂 '+(m.kategori||'Lainnya'))+'</div><div style="font-size:13px;font-weight:600;color:'+(m.harga>BUDGET?'var(--red)':'var(--orange)')+'">'+rp(m.harga)+(m.harga>BUDGET?' ⚠️':'')+'</div>'+rH+'</div><button class="btn danger sm" onclick="hapusMenu(\''+m.id+'\')">Hapus</button></div>';}).join('');
     var reviews=Object.values(cache.rating).filter(function(r){return r.komentar;}).sort(function(a,b){return b.tanggal>a.tanggal?1:-1;}).slice(0,5);
     var reviewHtml=reviews.length===0?'':'<div class="section-label">💬 Ulasan Terbaru</div>'+reviews.map(function(r){return'<div class="card" style="padding:12px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><div style="font-size:13px;font-weight:700">'+getEmoji(r.menu)+' '+r.menu+'</div><div style="font-size:12px;color:var(--yellow)">'+renderStars(r.nilai)+' '+r.nilai+'/5</div></div>'+(r.komentar?'<div style="font-size:12px;color:var(--text2);font-style:italic">"'+r.komentar+'"</div>':'')+'<div style="font-size:11px;color:var(--text3);margin-top:4px">'+fmtDate(r.tanggal)+'</div></div>';}).join('');
-    document.getElementById('at-menu').innerHTML='<div class="section-label">🍽️ Daftar Menu ('+cache.menu.length+' item)</div>'+menuItems+'<div class="section-label">➕ Tambah Menu Baru</div><div class="card"><div class="fg"><label>Nama Menu</label><input type="text" id="nm-nama" placeholder="mis: Ayam Geprek"></div><div class="fg" style="margin-bottom:4px"><label>Harga (Rp)</label><input type="number" id="nm-harga" placeholder="mis: 14000" inputmode="numeric"></div><button class="btn primary" onclick="tambahMenu()">Tambah Menu</button></div><div class="alert info">ℹ️ Menu di atas '+rp(BUDGET)+' akan memunculkan tagihan ke karyawan.</div>'+reviewHtml;
+    document.getElementById('at-menu').innerHTML=
+      '<div class="section-label">🍽️ Daftar Menu ('+cache.menu.length+' item)</div>'
+      +menuItems
+      +'<div class="section-label">➕ Tambah Menu Baru</div>'
+      +'<div class="card">'
+      +'<div class="fg"><label>Nama Menu</label><input type="text" id="nm-nama" placeholder="mis: Ayam Geprek"></div>'
+      +'<div class="fg"><label>Kategori</label><select id="nm-kategori">'+KATEGORI_LIST.filter(function(k){return k!=='Semua';}).map(function(k){return'<option value="'+k+'">'+k+'</option>';}).join('')+'</select></div>'
+      +'<div class="fg" style="margin-bottom:4px"><label>Harga (Rp)</label><input type="number" id="nm-harga" placeholder="mis: 14000" inputmode="numeric"></div>'
+      +'<button class="btn primary" onclick="tambahMenu()">Tambah Menu</button>'
+      +'</div>'
+      +'<div class="section-label">📥 Import Menu dari Excel</div>'
+      +'<div class="card">'
+      +'<div class="alert info" style="margin-bottom:10px">Format: kolom <strong>A=Nama Menu</strong>, <strong>B=Kategori</strong>, <strong>C=Harga</strong> (angka). Baris pertama = header. Delimiter <strong>koma (,)</strong> atau <strong>titik koma (;)</strong> otomatis terdeteksi. Harga boleh pakai titik ribuan (mis: 15.000).</div>'
+      +'<button class="btn secondary" onclick="unduhTemplateExcel()" style="margin-bottom:10px">⬇️ Unduh Template Excel</button>'
+      +'<div class="fg" style="margin-bottom:4px"><label>Pilih File Excel (.xlsx / .csv)</label>'
+      +'<input type="file" id="import-excel-file" accept=".xlsx,.csv,.xls" style="padding:8px;font-size:13px">'
+      +'</div>'
+      +'<div id="import-preview" style="display:none;background:var(--bg);border-radius:var(--radius-sm);padding:10px;margin-bottom:10px;max-height:180px;overflow-y:auto;font-size:12px"></div>'
+      +'<button class="btn success" onclick="importMenuExcel()">📥 Import Sekarang</button>'
+      +'</div>'
+      +'<div class="alert info">ℹ️ Menu di atas '+rp(BUDGET)+' akan memunculkan tagihan ke karyawan.</div>'
+      +reviewHtml;
   }
 
   if(tab==='akun'){
@@ -1443,7 +1564,7 @@ function resetLunasKaryawan(kid,nama){
   promises.push(db.ref('tagihan/'+kid).remove());
   Promise.all(promises).then(function(){showToast('✅ Data lunas '+nama+' direset','ok');});
 }
-function tambahMenu(){var nama=document.getElementById('nm-nama').value.trim();var harga=parseInt(document.getElementById('nm-harga').value);if(!nama||isNaN(harga)||harga<=0){showToast('Isi nama dan harga dengan benar');return;}var mid='m'+Date.now();db.ref('menu/'+mid).set({id:mid,nama:nama,harga:harga}).then(function(){showToast('✅ Menu ditambahkan','ok');});}
+function tambahMenu(){var nama=document.getElementById('nm-nama').value.trim();var harga=parseInt(document.getElementById('nm-harga').value);var kategori=document.getElementById('nm-kategori')?document.getElementById('nm-kategori').value:'Lainnya';if(!nama||isNaN(harga)||harga<=0){showToast('Isi nama dan harga dengan benar');return;}var mid='m'+Date.now();db.ref('menu/'+mid).set({id:mid,nama:nama,harga:harga,kategori:kategori}).then(function(){showToast('✅ Menu ditambahkan','ok');document.getElementById('nm-nama').value='';document.getElementById('nm-harga').value='';});}
 function hapusMenu(id){if(!confirm('Hapus menu ini?'))return;db.ref('menu/'+id).remove().then(function(){showToast('Menu dihapus');});}
 function tambahKaryawan(){var nama=document.getElementById('nk-nama').value.trim();var pin=document.getElementById('nk-pin').value.trim();if(!nama||pin.length!==4||isNaN(pin)){showToast('Isi nama dan PIN 4 digit');return;}if(pin===ADMIN_PIN||pin===WARMINDO_PIN){showToast('PIN ini sudah dipakai sistem');return;}var kid='k'+Date.now();db.ref('karyawan/'+kid).set({id:kid,nama:nama,pin:pin}).then(function(){showToast('✅ Karyawan ditambahkan','ok');});}
 function hapusKaryawan(id){if(!confirm('Hapus akun karyawan ini?'))return;db.ref('karyawan/'+id).remove().then(function(){showToast('Akun dihapus');});}
@@ -1746,6 +1867,166 @@ function downloadTagihanPDF(){
   var w=window.open('','_blank');if(!w){showToast('Aktifkan popup untuk PDF');return;}
   w.document.write(html);w.document.close();
   showToast('✅ PDF siap dicetak','ok');
+}
+
+// ─────────────────────────────────────────────────────────
+//  IMPORT MENU EXCEL
+// ─────────────────────────────────────────────────────────
+function unduhTemplateExcel(){
+  // Gunakan semicolon agar kompatibel dengan Excel versi Indonesia
+  var csv='\uFEFF'+'Nama Menu;Kategori;Harga\nNasi Goreng;Nasi;12000\nMie Ayam;Mie;13000\nSoto Betawi;Sup;15000\nAyam Geprek;Lauk;16000\n';
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');
+  a.href=url;a.download='template-menu-makanyuk.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('✅ Template diunduh','ok');
+}
+
+// Parser CSV yang kuat: support delimiter , atau ; dan quoted fields
+function parseCSVLine(line, delim){
+  var result=[];var cur='';var inQ=false;
+  for(var i=0;i<line.length;i++){
+    var c=line[i];
+    if(c==='"'){
+      // double-quote escape ""
+      if(inQ&&line[i+1]==='"'){cur+='"';i++;}
+      else{inQ=!inQ;}
+    } else if(c===delim&&!inQ){
+      result.push(cur.trim());cur='';
+    } else {
+      cur+=c;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+// Bersihkan nilai cell: hapus quotes, spasi, tab, karakter tak terlihat
+function cleanCell(val){
+  if(!val)return'';
+  return String(val)
+    .replace(/^["'\u2018\u2019\u201C\u201D]+|["'\u2018\u2019\u201C\u201D]+$/g,'') // smart quotes
+    .replace(/[\u00A0\u200B\uFEFF]/g,'') // non-breaking space, zero-width, BOM
+    .trim();
+}
+
+// Cari delimiter yang dominan di file
+function detectDelimiter(firstLine){
+  var commas=(firstLine.match(/,/g)||[]).length;
+  var semis=(firstLine.match(/;/g)||[]).length;
+  var tabs=(firstLine.match(/\t/g)||[]).length;
+  if(tabs>=commas&&tabs>=semis)return'\t';
+  if(semis>=commas)return';';
+  return',';
+}
+
+function importMenuExcel(){
+  var fileInput=document.getElementById('import-excel-file');
+  if(!fileInput||!fileInput.files||!fileInput.files[0]){showToast('Pilih file Excel/CSV dulu');return;}
+  var file=fileInput.files[0];
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var text=e.target.result;
+      // Hapus BOM (UTF-8, UTF-16)
+      text=text.replace(/^\uFEFF/,'').replace(/^\uFFFE/,'');
+      // Normalisasi line endings
+      var lines=text.split(/\r\n|\r|\n/).filter(function(l){return l.replace(/[,;\t\s]/g,'')!=='';});
+
+      if(lines.length<2){showToast('File kosong atau hanya header');return;}
+
+      // Deteksi delimiter otomatis dari baris pertama
+      var delim=detectDelimiter(lines[0]);
+
+      // Parse header untuk cari posisi kolom (fleksibel urutan)
+      var headers=parseCSVLine(lines[0],delim).map(function(h){return cleanCell(h).toLowerCase().replace(/[^a-z]/g,'');});
+      // Cari index kolom nama, kategori, harga
+      var iNama=-1,iKat=-1,iHarga=-1;
+      headers.forEach(function(h,idx){
+        if(iNama===-1&&(h.indexOf('nama')!==-1||h.indexOf('menu')!==-1))iNama=idx;
+        if(iKat===-1&&(h.indexOf('kategori')!==-1||h.indexOf('category')!==-1||h.indexOf('kat')!==-1))iKat=idx;
+        if(iHarga===-1&&(h.indexOf('harga')!==-1||h.indexOf('price')!==-1||h.indexOf('hrg')!==-1))iHarga=idx;
+      });
+      // Fallback: kalau header tidak dikenali, pakai posisi A=0, B=1, C=2
+      if(iNama===-1)iNama=0;
+      if(iKat===-1)iKat=1;
+      if(iHarga===-1)iHarga=2;
+
+      var preview=document.getElementById('import-preview');
+      var items=[];var errors=[];
+
+      for(var i=1;i<lines.length;i++){
+        var cols=parseCSVLine(lines[i],delim);
+        var nama=cleanCell(cols[iNama]||'');
+        var kat=cleanCell(cols[iKat]||'')||'Lainnya';
+        // Bersihkan harga: hapus Rp, titik ribuan, spasi
+        var hargaRaw=cleanCell(cols[iHarga]||'').replace(/[Rp\.\s]/gi,'').replace(/,/g,'');
+        var harga=parseInt(hargaRaw);
+
+        if(!nama){
+          if(cols.join('').trim()!=='')errors.push('Baris '+(i+1)+': nama kosong');
+          continue;
+        }
+        if(isNaN(harga)||harga<=0){
+          errors.push('Baris '+(i+1)+' "'+nama+'": harga tidak valid → "'+cleanCell(cols[iHarga]||'')+'"');
+          continue;
+        }
+        // Validasi & fallback kategori
+        if(KATEGORI_LIST.indexOf(kat)===-1){
+          // Coba cocokkan sebagian
+          var matched=KATEGORI_LIST.find(function(k){return k!=='Semua'&&k.toLowerCase()===kat.toLowerCase();});
+          kat=matched||'Lainnya';
+        }
+        items.push({nama:nama,kategori:kat,harga:harga});
+      }
+
+      // Tampilkan preview
+      var delimLabel=delim===';'?'titik koma (;)':delim==='\t'?'tab':delim;
+      var previewHtml='<div style="font-weight:800;margin-bottom:6px;color:var(--text)">📋 Preview ('+items.length+' menu siap diimport)</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-bottom:6px">Delimiter terdeteksi: '+delimLabel+' · Kolom: A=Nama, B=Kategori, C=Harga</div>';
+
+      if(items.length>0){
+        previewHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse">'
+          +'<tr style="background:var(--orange-light)"><th style="padding:4px 6px;text-align:left">Nama</th><th style="padding:4px 6px;text-align:left">Kategori</th><th style="padding:4px 6px;text-align:right">Harga</th></tr>';
+        items.slice(0,10).forEach(function(m,idx){
+          previewHtml+='<tr style="background:'+(idx%2===0?'#fff':'var(--bg)')+'"><td style="padding:4px 6px;font-weight:700">'+m.nama+'</td>'
+            +'<td style="padding:4px 6px;color:var(--text3)">'+m.kategori+'</td>'
+            +'<td style="padding:4px 6px;font-weight:700;color:var(--orange);text-align:right">'+rp(m.harga)+'</td></tr>';
+        });
+        previewHtml+='</table>';
+        if(items.length>10)previewHtml+='<div style="color:var(--text3);margin-top:4px;font-size:11px">...dan '+(items.length-10)+' menu lainnya</div>';
+      }
+
+      if(errors.length>0){
+        previewHtml+='<div style="color:var(--red);margin-top:8px;font-weight:700;font-size:12px">⚠️ '+errors.length+' baris dilewati:</div>'
+          +'<div style="color:var(--red);font-size:11px;margin-top:3px">'+errors.slice(0,5).join('<br>')+'</div>';
+      }
+
+      preview.style.display='block';
+      preview.innerHTML=previewHtml;
+
+      if(items.length===0){showToast('Tidak ada data valid untuk diimport');return;}
+
+      if(!confirm('Import '+items.length+' menu ke database?\nMenu yang sudah ada TIDAK terhapus.'))return;
+
+      // Tulis ke Firebase
+      var updates={};
+      items.forEach(function(m){
+        var mid='m'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+        updates['menu/'+mid]={id:mid,nama:m.nama,harga:m.harga,kategori:m.kategori};
+      });
+      db.ref().update(updates).then(function(){
+        showToast('✅ '+items.length+' menu berhasil diimport','ok');
+        fileInput.value='';
+        preview.style.display='none';
+      }).catch(function(err){showToast('Gagal import: '+err.message);});
+
+    }catch(err){
+      showToast('Error baca file: '+err.message);
+      console.error('[IMPORT ERROR]',err);
+    }
+  };
+  reader.readAsText(file,'UTF-8');
 }
 
 // ─────────────────────────────────────────────────────────

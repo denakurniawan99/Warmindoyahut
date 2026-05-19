@@ -1397,7 +1397,26 @@ function renderAdminTab(tab){
 
   if(tab==='akun'){
     var akunItems=cache.karyawan.map(function(k){return'<div style="background:#fff;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;box-shadow:var(--shadow)"><div class="list-avatar">'+inisial(k.nama)+'</div><div style="flex:1"><div style="font-size:14px;font-weight:700">'+k.nama+'</div><div style="font-size:12px;color:var(--text3)">PIN: '+'•'.repeat(k.pin.length)+'</div></div><div style="display:flex;gap:6px"><button class="btn secondary sm" onclick="openGantiPin(\''+k.id+'\')">🔑 PIN</button><button class="btn danger sm" onclick="hapusKaryawan(\''+k.id+'\')">Hapus</button></div></div>';}).join('');
-    document.getElementById('at-akun').innerHTML='<div class="section-label">👥 Akun Karyawan ('+cache.karyawan.length+' orang)</div>'+akunItems+'<div class="section-label">➕ Tambah Karyawan Baru</div><div class="card"><div class="fg"><label>Nama Lengkap</label><input type="text" id="nk-nama" placeholder="mis: Budi Santoso"></div><div class="fg" style="margin-bottom:4px"><label>PIN (4 digit)</label><input type="number" id="nk-pin" placeholder="mis: 1234" maxlength="4" inputmode="numeric"></div><button class="btn primary" onclick="tambahKaryawan()">Tambah Karyawan</button></div><div class="alert warning">⚠️ PIN admin: <strong>0000</strong> · PIN warmindo: <strong>9999</strong> · Jangan gunakan untuk karyawan.</div>';
+    document.getElementById('at-akun').innerHTML=
+      '<div class="section-label">👥 Akun Karyawan ('+cache.karyawan.length+' orang)</div>'
+      +akunItems
+      +'<div class="section-label">➕ Tambah Karyawan Baru</div>'
+      +'<div class="card">'
+      +'<div class="fg"><label>Nama Lengkap</label><input type="text" id="nk-nama" placeholder="mis: Budi Santoso"></div>'
+      +'<div class="fg" style="margin-bottom:4px"><label>PIN (4 digit)</label><input type="number" id="nk-pin" placeholder="mis: 1234" maxlength="4" inputmode="numeric"></div>'
+      +'<button class="btn primary" onclick="tambahKaryawan()">Tambah Karyawan</button>'
+      +'</div>'
+      +'<div class="section-label">📥 Import Karyawan dari Excel</div>'
+      +'<div class="card">'
+      +'<div class="alert info" style="margin-bottom:10px">Format: kolom <strong>A=Nama Lengkap</strong>, <strong>B=PIN (4 digit)</strong>. Baris pertama = header. Delimiter koma <strong>(,)</strong> atau titik koma <strong>(;)</strong> otomatis terdeteksi.</div>'
+      +'<button class="btn secondary" onclick="unduhTemplateKaryawan()" style="margin-bottom:10px">⬇️ Unduh Template Excel</button>'
+      +'<div class="fg" style="margin-bottom:4px"><label>Pilih File (.xlsx / .csv)</label>'
+      +'<input type="file" id="import-akun-file" accept=".xlsx,.csv,.xls" style="padding:8px;font-size:13px">'
+      +'</div>'
+      +'<div id="import-akun-preview" style="display:none;background:var(--bg);border-radius:var(--radius-sm);padding:10px;margin-bottom:10px;max-height:200px;overflow-y:auto;font-size:12px"></div>'
+      +'<button class="btn success" onclick="importKaryawanExcel()">📥 Import Sekarang</button>'
+      +'</div>'
+      +'<div class="alert warning">⚠️ PIN admin: <strong>0000</strong> · PIN warmindo: <strong>9999</strong> · Jangan gunakan untuk karyawan.</div>';
   }
 }
 
@@ -1642,6 +1661,93 @@ function resetLunasKaryawan(kid,nama){
 function tambahMenu(){var nama=document.getElementById('nm-nama').value.trim();var harga=parseInt(document.getElementById('nm-harga').value);var kategori=document.getElementById('nm-kategori')?document.getElementById('nm-kategori').value:'Lainnya';if(!nama||isNaN(harga)||harga<=0){showToast('Isi nama dan harga dengan benar');return;}var mid='m'+Date.now();db.ref('menu/'+mid).set({id:mid,nama:nama,harga:harga,kategori:kategori}).then(function(){showToast('✅ Menu ditambahkan','ok');document.getElementById('nm-nama').value='';document.getElementById('nm-harga').value='';});}
 function hapusMenu(id){if(!confirm('Hapus menu ini?'))return;db.ref('menu/'+id).remove().then(function(){showToast('Menu dihapus');});}
 function tambahKaryawan(){var nama=document.getElementById('nk-nama').value.trim();var pin=document.getElementById('nk-pin').value.trim();if(!nama||pin.length!==4||isNaN(pin)){showToast('Isi nama dan PIN 4 digit');return;}if(pin===ADMIN_PIN||pin===WARMINDO_PIN){showToast('PIN ini sudah dipakai sistem');return;}var kid='k'+Date.now();db.ref('karyawan/'+kid).set({id:kid,nama:nama,pin:pin}).then(function(){showToast('✅ Karyawan ditambahkan','ok');});}
+
+// ─── IMPORT KARYAWAN EXCEL ───
+function unduhTemplateKaryawan(){
+  var csv='\uFEFF'+'Nama Lengkap;PIN\nBudi Santoso;1234\nSiti Aminah;5678\nAgus Raharjo;4321\n';
+  var blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);var a=document.createElement('a');
+  a.href=url;a.download='template-karyawan-makanyuk.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  showToast('✅ Template diunduh','ok');
+}
+
+function importKaryawanExcel(){
+  var fileInput=document.getElementById('import-akun-file');
+  if(!fileInput||!fileInput.files||!fileInput.files[0]){showToast('Pilih file dulu');return;}
+  var file=fileInput.files[0];
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var text=e.target.result.replace(/^\uFEFF/,'').replace(/^\uFFFE/,'');
+      var lines=text.split(/\r\n|\r|\n/).filter(function(l){return l.replace(/[,;\t\s]/g,'')!=='';});
+      if(lines.length<2){showToast('File kosong atau hanya header');return;}
+      var delim=detectDelimiter(lines[0]);
+      // Deteksi posisi kolom dari header
+      var headers=parseCSVLine(lines[0],delim).map(function(h){return cleanCell(h).toLowerCase().replace(/[^a-z]/g,'');});
+      var iNama=-1,iPin=-1;
+      headers.forEach(function(h,idx){
+        if(iNama===-1&&(h.indexOf('nama')!==-1||h.indexOf('name')!==-1))iNama=idx;
+        if(iPin===-1&&(h.indexOf('pin')!==-1||h.indexOf('pass')!==-1||h.indexOf('sandi')!==-1))iPin=idx;
+      });
+      if(iNama===-1)iNama=0;
+      if(iPin===-1)iPin=1;
+
+      var items=[];var errors=[];
+      var pinTerpakai=cache.karyawan.map(function(k){return k.pin;});
+
+      for(var i=1;i<lines.length;i++){
+        var cols=parseCSVLine(lines[i],delim);
+        var nama=cleanCell(cols[iNama]||'');
+        var pin=cleanCell(cols[iPin]||'').replace(/[^0-9]/g,'');
+        if(!nama){if(cols.join('').trim()!=='')errors.push('Baris '+(i+1)+': nama kosong');continue;}
+        if(pin.length!==4){errors.push('Baris '+(i+1)+' "'+nama+'": PIN harus 4 digit → "'+cleanCell(cols[iPin]||'')+'"');continue;}
+        if(pin===ADMIN_PIN||pin===WARMINDO_PIN){errors.push('Baris '+(i+1)+' "'+nama+'": PIN '+pin+' sudah dipakai sistem');continue;}
+        if(pinTerpakai.indexOf(pin)!==-1){errors.push('Baris '+(i+1)+' "'+nama+'": PIN '+pin+' sudah dipakai karyawan lain');continue;}
+        // Cek duplikat nama
+        var namaExists=cache.karyawan.some(function(k){return k.nama.toLowerCase()===nama.toLowerCase();});
+        if(namaExists){errors.push('Baris '+(i+1)+': "'+nama+'" sudah terdaftar');continue;}
+        pinTerpakai.push(pin);
+        items.push({nama:nama,pin:pin});
+      }
+
+      // Tampilkan preview
+      var preview=document.getElementById('import-akun-preview');
+      var previewHtml='<div style="font-weight:800;margin-bottom:6px;color:var(--text)">👥 Preview ('+items.length+' karyawan akan diimport)</div>';
+      if(items.length>0){
+        previewHtml+='<table style="width:100%;font-size:12px;border-collapse:collapse">'
+          +'<tr style="background:var(--orange-light)"><th style="padding:4px 8px;text-align:left">Nama</th><th style="padding:4px 8px;text-align:center">PIN</th></tr>';
+        items.forEach(function(k,idx){
+          previewHtml+='<tr style="background:'+(idx%2===0?'#fff':'var(--bg)')+'">'
+            +'<td style="padding:5px 8px;font-weight:700">'+k.nama+'</td>'
+            +'<td style="padding:5px 8px;text-align:center;letter-spacing:3px;font-weight:800;color:var(--orange)">••••</td></tr>';
+        });
+        previewHtml+='</table>';
+      }
+      if(errors.length>0){
+        previewHtml+='<div style="color:var(--red);margin-top:8px;font-weight:700;font-size:12px">⚠️ '+errors.length+' baris dilewati:</div>'
+          +'<div style="color:var(--red);font-size:11px;margin-top:3px">'+errors.slice(0,5).join('<br>')+'</div>';
+      }
+      preview.style.display='block';
+      preview.innerHTML=previewHtml;
+
+      if(items.length===0){showToast('Tidak ada data valid untuk diimport');return;}
+      if(!confirm('Import '+items.length+' karyawan ke database?'))return;
+
+      var updates={};
+      items.forEach(function(k){
+        var kid='k'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+        updates['karyawan/'+kid]={id:kid,nama:k.nama,pin:k.pin};
+      });
+      db.ref().update(updates).then(function(){
+        showToast('✅ '+items.length+' karyawan berhasil diimport','ok');
+        fileInput.value='';
+        preview.style.display='none';
+      }).catch(function(err){showToast('Gagal import: '+err.message);});
+    }catch(err){showToast('Error baca file: '+err.message);console.error(err);}
+  };
+  reader.readAsText(file,'UTF-8');
+}
 function hapusKaryawan(id){if(!confirm('Hapus akun karyawan ini?'))return;db.ref('karyawan/'+id).remove().then(function(){showToast('Akun dihapus');});}
 function openGantiPin(kid){var k=cache.karyawan.find(function(x){return x.id===kid;});if(!k)return;editPinKid=kid;document.getElementById('gpin-nama').value=k.nama;document.getElementById('gpin-baru').value='';document.getElementById('gpin-konfirm').value='';document.getElementById('gpin-err').style.display='none';document.getElementById('modal-pin').classList.add('show');}
 function simpanPin(){var baru=document.getElementById('gpin-baru').value.trim();var konfirm=document.getElementById('gpin-konfirm').value.trim();var errEl=document.getElementById('gpin-err');if(baru.length!==4||isNaN(baru)){errEl.textContent='PIN harus 4 digit angka';errEl.style.display='block';return;}if(baru===ADMIN_PIN||baru===WARMINDO_PIN){errEl.textContent='PIN ini sudah dipakai sistem';errEl.style.display='block';return;}if(baru!==konfirm){errEl.textContent='PIN konfirmasi tidak cocok';errEl.style.display='block';return;}db.ref('karyawan/'+editPinKid+'/pin').set(baru).then(function(){showToast('✅ PIN berhasil diubah','ok');closeModal('modal-pin');});}

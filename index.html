@@ -999,7 +999,7 @@ function setRating(v){ratingValue=v;var labels=['','😕 Kurang','😐 Biasa','�
 function updateRatingStars(){var stars=document.getElementById('rating-stars').querySelectorAll('.star');stars.forEach(function(s,i){s.textContent=i<ratingValue?'⭐':'☆';});}
 function kirimRating(){
   if(ratingValue===0){showToast('Pilih bintang dulu');return;}
-  db.ref('rating/'+ratingPid).set({pid:ratingPid,kid:currentUser.id,menu:ratingMenuNama,nilai:ratingValue,komentar:document.getElementById('rating-komentar').value.trim(),tanggal:today()}).then(function(){showToast('✅ Rating terkirim!','ok');closeModal('modal-rating');});
+  db.ref('rating/'+ratingPid).set({pid:ratingPid,kid:currentUser.id,karyawan:currentUser.nama||'',menu:ratingMenuNama,nilai:ratingValue,komentar:document.getElementById('rating-komentar').value.trim(),tanggal:today()}).then(function(){showToast('✅ Rating terkirim!','ok');closeModal('modal-rating');});
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1019,16 +1019,92 @@ function renderWarmindo(){
   var ratingByMenu={};Object.values(cache.rating).forEach(function(r){if(!ratingByMenu[r.menu])ratingByMenu[r.menu]=[];ratingByMenu[r.menu].push(r.nilai);});
   var ratingHtml='';
   if(Object.keys(ratingByMenu).length>0){
+    // Urutkan menu berdasarkan avg rating tertinggi
+    var sortedMenus=Object.entries(ratingByMenu).sort(function(a,b){
+      var avgA=a[1].reduce(function(x,y){return x+y;},0)/a[1].length;
+      var avgB=b[1].reduce(function(x,y){return x+y;},0)/b[1].length;
+      return avgB-avgA;
+    });
     ratingHtml='<div class="section-label">⭐ Rating Menu</div><div class="card" style="padding:8px 0">';
-    Object.entries(ratingByMenu).forEach(function(e){var avg=(e[1].reduce(function(a,b){return a+b;},0)/e[1].length).toFixed(1);ratingHtml+='<div class="list-row"><div style="display:flex;align-items:center;gap:8px"><span>'+getEmoji(e[0])+'</span><div style="font-size:14px;font-weight:700">'+e[0]+'</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:800;color:var(--yellow)">'+renderStars(avg)+'</div><div style="font-size:11px;color:var(--text3)">'+avg+'/5 · '+e[1].length+' ulasan</div></div></div>';});
+    sortedMenus.forEach(function(e){
+      var avg=(e[1].reduce(function(a,b){return a+b;},0)/e[1].length).toFixed(1);
+      var barW=Math.round((avg/5)*100);
+      ratingHtml+='<div class="list-row" style="flex-direction:column;align-items:flex-start;gap:4px">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;width:100%">'
+        +'<div style="display:flex;align-items:center;gap:8px"><span>'+getEmoji(e[0])+'</span><div style="font-size:14px;font-weight:700">'+e[0]+'</div></div>'
+        +'<div style="text-align:right"><div style="font-size:13px;font-weight:800;color:var(--yellow)">'+renderStars(avg)+'</div>'
+        +'<div style="font-size:11px;color:var(--text3)">'+avg+'/5 · '+e[1].length+' ulasan</div></div></div>'
+        +'<div style="width:100%;height:5px;background:var(--border);border-radius:99px;overflow:hidden">'
+        +'<div style="width:'+barW+'%;height:100%;background:var(--yellow);border-radius:99px;transition:.3s"></div></div>'
+        +'</div>';
+    });
     ratingHtml+='</div>';
   }
-  if(hari.length===0){el.innerHTML=jamBtn+'<div class="empty-state"><div class="empty-icon">🕐</div><p style="font-size:14px;font-weight:600">Belum ada pesanan masuk</p><span>Pesanan muncul otomatis di sini</span></div>'+ratingHtml;return;}
+
+  // ── ULASAN & KOMENTAR lengkap ──
+  var allReviews=Object.values(cache.rating)
+    .sort(function(a,b){return(b.tanggal||'')>(a.tanggal||'')?1:-1;});
+  var ulasanHtml='';
+  if(allReviews.length>0){
+    // Pisah: ada komentar vs tidak
+    var denganKomentar=allReviews.filter(function(r){return r.komentar&&r.komentar.trim()!='';});
+    var tanpaKomentar=allReviews.filter(function(r){return !r.komentar||r.komentar.trim()==='';});
+
+    ulasanHtml='<div class="section-label">💬 Ulasan & Kritik Saran</div>';
+
+    // Summary badge
+    var totalUlasan=allReviews.length;
+    var avgSemua=(allReviews.reduce(function(a,r){return a+r.nilai;},0)/totalUlasan).toFixed(1);
+    var positif=allReviews.filter(function(r){return r.nilai>=4;}).length;
+    var negatif=allReviews.filter(function(r){return r.nilai<=2;}).length;
+    ulasanHtml+='<div style="display:flex;gap:8px;margin-bottom:10px">'
+      +'<div style="flex:1;background:#fff;border-radius:12px;padding:10px 12px;text-align:center;box-shadow:var(--shadow)">'
+      +'<div style="font-size:22px;font-weight:800;color:var(--yellow)">'+avgSemua+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);font-weight:600">Rata-rata</div></div>'
+      +'<div style="flex:1;background:#fff;border-radius:12px;padding:10px 12px;text-align:center;box-shadow:var(--shadow)">'
+      +'<div style="font-size:22px;font-weight:800;color:var(--green)">'+positif+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);font-weight:600">👍 Positif</div></div>'
+      +'<div style="flex:1;background:#fff;border-radius:12px;padding:10px 12px;text-align:center;box-shadow:var(--shadow)">'
+      +'<div style="font-size:22px;font-weight:800;color:var(--red)">'+negatif+'</div>'
+      +'<div style="font-size:11px;color:var(--text3);font-weight:600">👎 Perlu Benahi</div></div>'
+      +'</div>';
+
+    if(denganKomentar.length>0){
+      ulasanHtml+='<div class="card" style="padding:0;overflow:hidden">';
+      denganKomentar.forEach(function(r,idx){
+        var bintang=r.nilai;
+        var starColor=bintang>=4?'var(--yellow)':bintang===3?'#F59E0B':'var(--red)';
+        var bgRow=bintang<=2?'#fff5f5':bintang>=4?'#f0fdf4':'#fff';
+        var borderTop=idx>0?'border-top:1px solid var(--border)':'';
+        ulasanHtml+='<div style="padding:12px 14px;background:'+bgRow+';'+borderTop+'">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+          +'<div style="display:flex;align-items:center;gap:6px">'
+          +'<span style="font-size:18px">'+getEmoji(r.menu)+'</span>'
+          +'<div>'
+          +'<div style="font-size:13px;font-weight:700">'+r.menu+'</div>'
+          +(r.karyawan?'<div style="font-size:11px;color:var(--text3)">👤 '+r.karyawan+'</div>':'')
+          +'</div></div>'
+          +'<div style="text-align:right;flex-shrink:0">'
+          +'<div style="font-size:13px;font-weight:800;color:'+starColor+'">'+renderStars(bintang)+' '+bintang+'/5</div>'
+          +'<div style="font-size:10px;color:var(--text3)">'+fmtDate(r.tanggal||'')+'</div>'
+          +'</div></div>'
+          +'<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--text2);font-style:italic;border-left:3px solid '+starColor+'">'
+          +'"'+r.komentar+'"'
+          +'</div></div>';
+      });
+      ulasanHtml+='</div>';
+    }
+
+    if(tanpaKomentar.length>0){
+      ulasanHtml+='<div style="font-size:12px;color:var(--text3);text-align:center;margin:8px 0">+ '+tanpaKomentar.length+' ulasan tanpa komentar</div>';
+    }
+  }
+  if(hari.length===0){el.innerHTML=jamBtn+'<div class="empty-state"><div class="empty-icon">🕐</div><p style="font-size:14px;font-weight:600">Belum ada pesanan masuk</p><span>Pesanan muncul otomatis di sini</span></div>'+ratingHtml+ulasanHtml;return;}
   var html=jamBtn;
   if(menunggu.length)html+='<div class="section-label">🔴 Menunggu ('+menunggu.length+')</div>'+menunggu.map(renderPesananCard).join('');
   if(diproses.length)html+='<div class="section-label">🟡 Diproses ('+diproses.length+')</div>'+diproses.map(renderPesananCard).join('');
   if(selesai.length)html+='<div class="section-label">🟢 Selesai ('+selesai.length+')</div>'+selesai.map(renderPesananCard).join('');
-  html+=ratingHtml;el.innerHTML=html;
+  html+=ratingHtml+ulasanHtml;el.innerHTML=html;
 }
 
 function renderPesananCard(p){

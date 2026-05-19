@@ -243,7 +243,15 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
           <option value="admin">⚙️ Admin / HRD</option>
         </select>
       </div>
-      <div id="wrap-nama" class="fg" style="margin-bottom:0"><label>Nama kamu</label><select id="login-nama"></select></div>
+      <div id="wrap-nama" class="fg" style="margin-bottom:0;position:relative">
+        <label>Nama kamu</label>
+        <input type="text" id="login-nama-input" placeholder="Ketik nama kamu..." autocomplete="off"
+          oninput="onNamaSearch(this.value)" onfocus="onNamaSearch(this.value)"
+          style="padding-right:36px">
+        <span id="login-nama-clear" onclick="clearNamaInput()" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(2px);font-size:18px;cursor:pointer;color:var(--text3);line-height:1">×</span>
+        <input type="hidden" id="login-nama">
+        <div id="login-nama-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border-radius:12px;box-shadow:var(--shadow-lg);z-index:999;max-height:220px;overflow-y:auto;border:1.5px solid var(--border);margin-top:4px"></div>
+      </div>
     </div>
     <div style="padding:24px 0 8px;text-align:center">
       <div style="font-size:13px;color:var(--text3);font-weight:600">Masukkan PIN</div>
@@ -581,7 +589,67 @@ function inisial(nama){return nama.split(' ').map(function(w){return w[0];}).joi
 function nowTime(){var n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
 function isOrderOpen(){var jp=cache.jamPesan;if(!jp.aktif)return false;var now=nowTime();return now>=jp.buka&&now<=jp.tutup;}
 function getMenuHariIni(){var d=new Date().getDay();var jh=cache.jadwal[d];if(jh&&jh.menuIds&&jh.menuIds.length>0)return cache.menu.filter(function(m){return jh.menuIds.indexOf(m.id)!==-1;});return cache.menu;}
-function renderLoginNama(){var el=document.getElementById('login-nama');if(el)el.innerHTML=cache.karyawan.map(function(k){return'<option value="'+k.id+'">'+k.nama+'</option>';}).join('');}
+function renderLoginNama(){
+  // Just refresh dropdown if it's open
+  var q=document.getElementById('login-nama-input');
+  if(q)onNamaSearch(q.value||'');
+}
+function onNamaSearch(q){
+  var dd=document.getElementById('login-nama-dropdown');
+  var clr=document.getElementById('login-nama-clear');
+  if(!dd)return;
+  if(clr)clr.style.display=q?'block':'none';
+  var lower=q.toLowerCase().trim();
+  var filtered=cache.karyawan.filter(function(k){
+    return !lower||k.nama.toLowerCase().indexOf(lower)!==-1;
+  }).slice(0,10);
+  if(filtered.length===0||(!lower&&cache.karyawan.length===0)){dd.style.display='none';return;}
+  dd.style.display='block';
+  dd.innerHTML=filtered.map(function(k){
+    // Highlight matched chars
+    var disp=k.nama;
+    if(lower){
+      var idx=k.nama.toLowerCase().indexOf(lower);
+      if(idx!==-1)disp=k.nama.slice(0,idx)+'<strong style="color:var(--orange)">'+k.nama.slice(idx,idx+lower.length)+'</strong>'+k.nama.slice(idx+lower.length);
+    }
+    return'<div onclick="pilihNama(\''+k.id+'\',\''+k.nama.replace(/'/g,"\\'")+'\')" '
+      +'style="display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;border-bottom:1px solid var(--border);transition:.1s" '
+      +'onmousedown="event.preventDefault()" '
+      +'onmouseover="this.style.background=\'var(--orange-light)\'" '
+      +'onmouseout="this.style.background=\'\'">'
+      +'<div style="width:32px;height:32px;background:var(--orange-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--orange);flex-shrink:0">'+inisial(k.nama)+'</div>'
+      +'<div style="font-size:14px;font-weight:600">'+disp+'</div>'
+      +'</div>';
+  }).join('');
+  // Show all hint when empty query
+  if(!lower&&cache.karyawan.length>10){
+    dd.innerHTML+='<div style="padding:8px 14px;font-size:11px;color:var(--text3);text-align:center">Ketik nama untuk mencari dari '+cache.karyawan.length+' karyawan</div>';
+  }
+}
+function pilihNama(kid,nama){
+  document.getElementById('login-nama').value=kid;
+  document.getElementById('login-nama-input').value=nama;
+  document.getElementById('login-nama-dropdown').style.display='none';
+  var clr=document.getElementById('login-nama-clear');
+  if(clr)clr.style.display='block';
+  // Reset PIN jika ada
+  pinInput='';updatePinDots();
+  document.getElementById('login-err').style.display='none';
+}
+function clearNamaInput(){
+  document.getElementById('login-nama').value='';
+  document.getElementById('login-nama-input').value='';
+  document.getElementById('login-nama-dropdown').style.display='none';
+  var clr=document.getElementById('login-nama-clear');
+  if(clr)clr.style.display='none';
+  document.getElementById('login-nama-input').focus();
+}
+// Tutup dropdown saat klik di luar
+document.addEventListener('click',function(e){
+  var dd=document.getElementById('login-nama-dropdown');
+  var wrap=document.getElementById('wrap-nama');
+  if(dd&&wrap&&!wrap.contains(e.target))dd.style.display='none';
+});
 function showScreen(id){document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('active');});document.getElementById(id).classList.add('active');}
 function showToast(msg,type){var t=document.getElementById('toast');t.textContent=msg;t.className='toast show'+(type==='ok'?' ok':type==='warn'?' warn':'');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show');},2500);}
 function closeModal(id){document.getElementById(id).classList.remove('show');}

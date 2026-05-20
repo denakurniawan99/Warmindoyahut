@@ -174,8 +174,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
 /* RIWAYAT CARD */
 .riwayat-card{background:#fff;border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;box-shadow:var(--shadow)}
 /* NOTIF */
-.notif-bell{position:relative;background:rgba(255,255,255,.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;transition:.15s}
+.notif-bell{position:relative;background:rgba(255,255,255,.2);border:none;color:#fff;width:34px;height:34px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:15px;transition:.15s;flex-shrink:0}
 .notif-bell:active{background:rgba(255,255,255,.3)}
+@media(max-width:400px){.logout-btn{padding:6px 10px;font-size:12px}.notif-bell{width:30px;height:30px;font-size:13px}}
 /* JADWAL */
 .day-pill{flex-shrink:0;padding:8px 12px;border-radius:99px;font-size:12px;font-weight:700;border:1.5px solid var(--border);background:#fff;cursor:pointer;color:var(--text3);transition:all .15s;text-align:center}
 .day-pill.active{background:var(--orange);color:#fff;border-color:var(--orange)}
@@ -191,7 +192,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
 <div class="app">
 
 <!-- SETUP -->
-<div class="screen active" id="s-setup">
+<div class="screen" id="s-setup">
   <div class="setup-hero">
     <div style="font-size:42px;margin-bottom:8px">🔥</div>
     <div style="font-size:22px;font-weight:800;color:#fff">Konfigurasi Firebase</div>
@@ -268,9 +269,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
     </div>
     <div id="login-err" style="text-align:center;color:var(--red);font-size:13px;margin-top:12px;display:none;font-weight:700;background:var(--red-light);padding:10px;border-radius:10px">❌ PIN salah, coba lagi</div>
     <div style="text-align:center;margin-top:14px;font-size:11px;color:var(--text3);font-weight:600;line-height:1.7">Demo PIN: Karyawan (1111, 2222...) · Warmindo: xxxx · Admin: ////</div>
-    <div style="text-align:center;margin-top:10px;margin-bottom:8px">
-      <button onclick="showScreen('s-setup')" style="background:none;border:none;font-size:12px;color:var(--text3);font-weight:600;cursor:pointer;font-family:inherit">⚙ Ganti Konfigurasi Firebase</button>
-    </div>
+    <div style="text-align:center;margin-top:10px;margin-bottom:8px"></div>
   </div>
 </div>
 
@@ -282,8 +281,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
         <span style="font-size:22px">🍱</span>
         <div><div style="font-size:16px;font-weight:800;color:#fff">MakanYuk</div><div style="font-size:10px;color:rgba(255,255,255,.65)">Makan Siang Kantor</div></div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <button class="notif-bell" id="k-notif-btn" onclick="toggleNotif()">🔔</button>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="notif-bell" id="k-suara-btn" onclick="toggleSuara()" title="Suara">🔊</button>
+        <button class="notif-bell" id="k-notif-btn" onclick="toggleNotif()" title="Notifikasi">🔔</button>
         <button class="logout-btn" onclick="doLogout()">Keluar</button>
       </div>
     </div>
@@ -307,13 +307,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
 <!-- WARMINDO -->
 <div class="screen" id="s-warmindo">
   <div class="warmindo-hero">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-      <div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+      <div style="flex:1;min-width:0;margin-right:8px">
         <div style="font-size:18px;font-weight:800;color:#fff">👨‍🍳 Dapur</div>
         <div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:2px" id="w-sub"><span class="rt-dot"></span>Real-time</div>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <button class="notif-bell" id="w-notif-btn" onclick="toggleNotif()">🔔</button>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <button class="notif-bell" id="w-suara-btn" onclick="toggleSuara()" title="Suara">🔊</button>
+        <button class="notif-bell" id="w-notif-btn" onclick="toggleNotif()" title="Notifikasi">🔔</button>
         <button class="logout-btn" onclick="doLogout()">Keluar</button>
       </div>
     </div>
@@ -545,8 +546,8 @@ function startListeners(){
   var h2=refs.menu.on('value',function(s){cache.menu=s.exists()?Object.values(s.val()):[];if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');if(currentRole==='karyawan')renderKaryawan();});
   var h3=refs.pesanan.on('value',function(s){
     var newP=s.exists()?Object.values(s.val()):[];
-    if(currentRole==='warmindo'&&newP.length>prevCount){var n=newP.filter(function(p){return p.tanggal===today()&&p.status==='Menunggu';});if(n.length>0)sendBrowserNotif('🍱 Pesanan Baru!',n[n.length-1].karyawan+' memesan '+n[n.length-1].menu);}
-    if(currentRole==='karyawan'&&currentUser){newP.forEach(function(np){var old=cache.pesanan.find(function(p){return p.id===np.id;});if(old&&old.status!==np.status&&np.kid===currentUser.id)sendBrowserNotif('🍽️ Status Pesanan',np.menu+' → '+np.status);});}
+    if(currentRole==='warmindo'&&newP.length>prevCount){var n=newP.filter(function(p){return p.tanggal===today()&&p.status==='Menunggu';});if(n.length>0){sendBrowserNotif('🍱 Pesanan Baru!',n[n.length-1].karyawan+' memesan '+n[n.length-1].menu);if(_suaraAktif)playSound('pesanan_baru');}}
+    if(currentRole==='karyawan'&&currentUser){newP.forEach(function(np){var old=cache.pesanan.find(function(p){return p.id===np.id;});if(old&&old.status!==np.status&&np.kid===currentUser.id){sendBrowserNotif('🍽️ Status Pesanan',np.menu+' → '+np.status);if(_suaraAktif)playSound('status_update');}});}
     prevCount=newP.length;cache.pesanan=newP;
     if(currentRole==='warmindo')renderWarmindo();
     if(currentRole==='admin')renderAdminTab(activeAdminTab);
@@ -565,6 +566,124 @@ function clearListeners(){listeners.forEach(function(l){l.ref.off(l.event,l.hand
 // ─────────────────────────────────────────────────────────
 //  NOTIF
 // ─────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────
+//  SUARA NOTIFIKASI (Web Audio API — tanpa file eksternal)
+// ─────────────────────────────────────────────────────────
+var _audioCtx=null;
+var _audioUnlocked=false;
+
+// Unlock AudioContext saat pertama kali user interaksi
+function unlockAudio(){
+  if(_audioUnlocked)return;
+  try{
+    _audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    // Mainkan suara senyap untuk unlock
+    var buf=_audioCtx.createBuffer(1,1,22050);
+    var src=_audioCtx.createBufferSource();
+    src.buffer=buf;src.connect(_audioCtx.destination);src.start(0);
+    _audioUnlocked=true;
+    console.log('[Audio] Unlocked, state:',_audioCtx.state);
+  }catch(e){console.warn('[Audio] Unlock gagal:',e);}
+}
+// Daftarkan unlock di setiap interaksi
+['touchstart','touchend','mousedown','keydown','click'].forEach(function(ev){
+  document.addEventListener(ev,unlockAudio,{once:false,passive:true});
+});
+
+function playSound(type){
+  if(!_suaraAktif)return;
+  // Coba unlock dulu jika belum
+  if(!_audioCtx){
+    try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();}
+    catch(e){console.warn('[Audio] Tidak bisa buat AudioContext:',e);return;}
+  }
+  var ctx=_audioCtx;
+  // Resume jika suspended (autoplay policy browser)
+  var doPlay=function(){
+    try{
+      if(type==='pesanan_baru'){
+        // Ding-dong naik: C5 E5 G5 C6
+        [523,659,784,1047].forEach(function(freq,i){
+          var o=ctx.createOscillator(),g=ctx.createGain();
+          o.connect(g);g.connect(ctx.destination);
+          o.type='sine';o.frequency.value=freq;
+          var t=ctx.currentTime+i*0.15;
+          g.gain.setValueAtTime(0,t);
+          g.gain.linearRampToValueAtTime(0.4,t+0.05);
+          g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+          o.start(t);o.stop(t+0.36);
+        });
+      } else if(type==='status_update'){
+        // Ping naik singkat
+        var o=ctx.createOscillator(),g=ctx.createGain();
+        o.connect(g);g.connect(ctx.destination);
+        o.type='sine';
+        o.frequency.setValueAtTime(800,ctx.currentTime);
+        o.frequency.exponentialRampToValueAtTime(1200,ctx.currentTime+0.1);
+        g.gain.setValueAtTime(0.35,ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
+        o.start(ctx.currentTime);o.stop(ctx.currentTime+0.31);
+      } else if(type==='pesanan_kirim'){
+        // 3 nada konfirmasi
+        [440,554,659].forEach(function(freq,i){
+          var o=ctx.createOscillator(),g=ctx.createGain();
+          o.connect(g);g.connect(ctx.destination);
+          o.type='triangle';o.frequency.value=freq;
+          var t=ctx.currentTime+i*0.11;
+          g.gain.setValueAtTime(0,t);
+          g.gain.linearRampToValueAtTime(0.28,t+0.03);
+          g.gain.exponentialRampToValueAtTime(0.001,t+0.22);
+          o.start(t);o.stop(t+0.23);
+        });
+      } else if(type==='test'){
+        // Suara test saat toggle aktifkan
+        [523,659,784].forEach(function(freq,i){
+          var o=ctx.createOscillator(),g=ctx.createGain();
+          o.connect(g);g.connect(ctx.destination);
+          o.type='sine';o.frequency.value=freq;
+          var t=ctx.currentTime+i*0.12;
+          g.gain.setValueAtTime(0,t);
+          g.gain.linearRampToValueAtTime(0.3,t+0.04);
+          g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
+          o.start(t);o.stop(t+0.26);
+        });
+      }
+    }catch(e){console.warn('[Audio] playSound error:',e);}
+  };
+
+  if(ctx.state==='suspended'){
+    ctx.resume().then(doPlay).catch(function(e){console.warn('[Audio] resume gagal:',e);});
+  } else {
+    doPlay();
+  }
+}
+
+var _suaraAktif=true;
+function toggleSuara(){
+  // Unlock audio pada interaksi pertama kali toggle
+  unlockAudio();
+  _suaraAktif=!_suaraAktif;
+  updateSuaraBtn();
+  localStorage.setItem('myk_suara',_suaraAktif?'1':'0');
+  if(_suaraAktif){
+    showToast('🔊 Suara notifikasi aktif','ok');
+    // Mainkan suara test supaya user tahu berhasil
+    setTimeout(function(){playSound('test');},100);
+  } else {
+    showToast('🔇 Suara notifikasi mati','warn');
+  }
+}
+function updateSuaraBtn(){
+  ['k-suara-btn','w-suara-btn'].forEach(function(id){
+    var btn=document.getElementById(id);if(!btn)return;
+    btn.innerHTML=_suaraAktif?'🔊':'🔇';
+    btn.style.background=_suaraAktif?'rgba(29,191,115,.4)':'rgba(255,255,255,.25)';
+    btn.title=_suaraAktif?'Suara Aktif — klik untuk matikan':'Suara Mati — klik untuk aktifkan';
+  });
+}
+// Load preferensi dari localStorage
+(function(){var s=localStorage.getItem('myk_suara');if(s==='0')_suaraAktif=false;})();
+
 function toggleNotif(){
   if(!('Notification'in window)){showToast('Browser tidak mendukung notifikasi');return;}
   if(Notification.permission==='granted'){showToast('✅ Notifikasi sudah aktif','ok');return;}
@@ -670,7 +789,7 @@ function doLogin(){
   else{var kid=document.getElementById('login-nama').value;var k=cache.karyawan.find(function(x){return x.id===kid;});if(k&&pinInput===k.pin)loginAs('karyawan',k);else showLoginErr();}
 }
 function showLoginErr(){document.getElementById('login-err').style.display='block';clearPin();}
-function loginAs(role,user){currentRole=role;currentUser=user;showScreen('s-'+role);window.scrollTo(0,0);updateNotifBtn();if(role==='karyawan'){keranjang={};showPesananExpanded=true;renderKaryawan();}if(role==='warmindo')renderWarmindo();if(role==='admin'){activeAdminTab='rekap';renderAdminAll();}}
+function loginAs(role,user){currentRole=role;currentUser=user;showScreen('s-'+role);window.scrollTo(0,0);updateNotifBtn();updateSuaraBtn();if(role==='karyawan'){keranjang={};showPesananExpanded=true;renderKaryawan();}if(role==='warmindo')renderWarmindo();if(role==='admin'){activeAdminTab='rekap';renderAdminAll();}}
 function doLogout(){currentRole=null;currentUser=null;keranjang={};clearPin();document.getElementById('login-role').value='karyawan';onRoleChange();showScreen('s-login');window.scrollTo(0,0);}
 
 // ─────────────────────────────────────────────────────────
@@ -1039,7 +1158,7 @@ function kirimPesan(){
 
   db.ref().update(updates).then(function(){
     keranjang={};
-    showToast('✅ Pesanan terkirim!','ok');
+    showToast('✅ Pesanan terkirim!','ok');if(_suaraAktif)playSound('pesanan_kirim');
   });
 }
 

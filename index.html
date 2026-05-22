@@ -1320,11 +1320,40 @@ function renderAdminAll(){renderAdminTab(activeAdminTab);}
 
 function getPesananFiltered(){
   var list=cache.pesanan.slice();
-  if(filterTanggal==='hari')list=list.filter(function(p){return p.tanggal===today();});
-  else if(filterTanggal==='minggu'){var cut=new Date();cut.setDate(cut.getDate()-7);list=list.filter(function(p){return new Date(p.tanggal)>=cut;});}
-  else if(filterTanggal==='bulan'){var ym=today().slice(0,7);list=list.filter(function(p){return p.tanggal.slice(0,7)===ym;});}
-  else if(filterTanggal==='custom'){if(filterDariTgl)list=list.filter(function(p){return p.tanggal>=filterDariTgl;});if(filterSampaiTgl)list=list.filter(function(p){return p.tanggal<=filterSampaiTgl;});}
+
+  // Normalisasi tanggal: pastikan format YYYY-MM-DD
+  function normTgl(t){
+    if(!t)return'';
+    // Kalau sudah YYYY-MM-DD langsung return
+    if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;
+    // Coba parse dan format ulang
+    try{return new Date(t).toISOString().slice(0,10);}catch(e){return'';}
+  }
+
+  var todayStr=today(); // YYYY-MM-DD
+  var todayYM=todayStr.slice(0,7); // YYYY-MM
+
+  if(filterTanggal==='hari'){
+    list=list.filter(function(p){return normTgl(p.tanggal)===todayStr;});
+  } else if(filterTanggal==='minggu'){
+    // 7 hari ke belakang — pakai string comparison agar timezone-safe
+    var d7=new Date(todayStr);d7.setDate(d7.getDate()-6);
+    var cutStr=d7.toISOString().slice(0,10);
+    list=list.filter(function(p){var t=normTgl(p.tanggal);return t>=cutStr&&t<=todayStr;});
+  } else if(filterTanggal==='bulan'){
+    list=list.filter(function(p){var t=normTgl(p.tanggal);return t.slice(0,7)===todayYM;});
+  } else if(filterTanggal==='semua'){
+    // Tampilkan semua — tidak difilter
+  } else if(filterTanggal==='custom'){
+    if(filterDariTgl)list=list.filter(function(p){return normTgl(p.tanggal)>=filterDariTgl;});
+    if(filterSampaiTgl)list=list.filter(function(p){return normTgl(p.tanggal)<=filterSampaiTgl;});
+  }
+
   if(filterNama!=='semua')list=list.filter(function(p){return p.kid===filterNama;});
+
+  // Buang data rusak (tanggal kosong)
+  list=list.filter(function(p){return normTgl(p.tanggal)!=='';});
+
   return list;
 }
 

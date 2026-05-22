@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="MakanYuk">
 <meta name="theme-color" content="#FF6B35">
-<title>MakanYuk v2.3 — Makan Siang Kantor</title>
+<title>MakanYuk v2.1 — Makan Siang Kantor</title>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -186,25 +186,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
 .pesanan-count-pill{background:rgba(255,255,255,.25);color:#fff;font-size:12px;font-weight:800;padding:3px 10px;border-radius:99px}
 /* DIVIDER */
 .divider{border:none;border-top:2px dashed var(--border);margin:14px 0}
-/* CHAT PESAN */
-.chat-toggle-btn{display:flex;align-items:center;gap:5px;background:var(--blue-light);border:1.5px solid #90CAF9;color:var(--blue);font-size:11px;font-weight:700;padding:5px 11px;border-radius:99px;cursor:pointer;font-family:inherit;transition:.15s;flex-shrink:0}
-.chat-toggle-btn.has-unread{background:var(--orange);border-color:var(--orange-dark);color:#fff;animation:rtpulse 1.5s infinite}
-.chat-toggle-btn:active{filter:brightness(.92)}
-.chat-box{background:var(--bg);border-radius:12px;padding:10px;margin-top:8px;border:1.5px solid var(--border)}
-.chat-msg{display:flex;gap:6px;margin-bottom:6px;align-items:flex-end}
-.chat-msg.warmindo{flex-direction:row}
-.chat-msg.karyawan{flex-direction:row-reverse}
-.chat-bubble{max-width:75%;padding:8px 11px;border-radius:14px;font-size:13px;line-height:1.5;word-break:break-word}
-.chat-msg.warmindo .chat-bubble{background:#fff;border:1.5px solid var(--border);border-bottom-left-radius:4px;color:var(--text)}
-.chat-msg.karyawan .chat-bubble{background:var(--orange);color:#fff;border-bottom-right-radius:4px}
-.chat-sender{font-size:10px;font-weight:700;color:var(--text3);margin-bottom:2px}
-.chat-time{font-size:10px;color:var(--text3);flex-shrink:0;padding-bottom:2px}
-.chat-input-row{display:flex;gap:6px;margin-top:8px;align-items:center}
-.chat-input-row input{flex:1;padding:9px 13px;font-size:13px;border:1.5px solid var(--border);border-radius:99px;background:#fff;font-family:inherit;outline:none}
-.chat-input-row input:focus{border-color:var(--orange)}
-.chat-send-btn{width:36px;height:36px;border-radius:50%;border:none;background:var(--orange);color:#fff;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.15s}
-.chat-send-btn:active{background:var(--orange-dark)}
-.chat-empty{text-align:center;padding:14px 0;font-size:12px;color:var(--text3);font-weight:600}
 </style>
 </head>
 <body>
@@ -518,7 +499,7 @@ var keranjang={},ratingPid=null,ratingMenuNama='',ratingValue=0;
 var selectedJadwalDay=new Date().getDay(),notifPermission=false;
 // showPesananExpanded: apakah ringkasan pesanan hari ini ditampilkan melebar
 var showPesananExpanded = true;
-var cache={karyawan:[],menu:[],pesanan:[],tagihan:{},jadwal:{},jamPesan:{buka:'07:00',tutup:'10:00',aktif:1},rating:{},lunasHistory:{},lunasBayar:{},chatPesan:{}};
+var cache={karyawan:[],menu:[],pesanan:[],tagihan:{},jadwal:{},jamPesan:{buka:'07:00',tutup:'10:00',aktif:1},rating:{},lunasHistory:{},lunasBayar:{}};
 
 // ─────────────────────────────────────────────────────────
 //  CONFIG
@@ -557,61 +538,129 @@ function setupInitialData(){
 // ─────────────────────────────────────────────────────────
 //  LISTENERS
 // ─────────────────────────────────────────────────────────
+var _renderTimer=null;
+function scheduleRender(){
+  // Debounce: tunggu 120ms setelah listener terakhir, baru render
+  if(_renderTimer)clearTimeout(_renderTimer);
+  _renderTimer=setTimeout(function(){
+    _renderTimer=null;
+    if(currentRole==='warmindo')renderWarmindo();
+    else if(currentRole==='karyawan')renderKaryawan();
+    else if(currentRole==='admin')renderAdminAll();
+  },120);
+}
+
 function startListeners(){
   clearListeners();
-  var refs={karyawan:db.ref('karyawan'),menu:db.ref('menu'),pesanan:db.ref('pesanan'),tagihan:db.ref('tagihan'),jadwal:db.ref('jadwal'),jamPesan:db.ref('jamPesan'),rating:db.ref('rating'),lunasBayar:db.ref('lunasBayar'),lunasHistory:db.ref('lunasHistory'),chatPesan:db.ref('chatPesan')};
+  // Track berapa listener sudah ready (untuk loading screen)
+  var _ready={karyawan:false,menu:false,pesanan:false,tagihan:false,jadwal:false,jamPesan:false,rating:false,lunasBayar:false,lunasHistory:false};
+  var _allReady=false;
+  function markReady(key){
+    _ready[key]=true;
+    if(_allReady)return;
+    var keys=Object.keys(_ready);
+    var doneCount=keys.filter(function(k){return _ready[k];}).length;
+    // Render awal setelah data penting (pesanan, menu, karyawan, jamPesan) sudah masuk
+    var critical=_ready.pesanan&&_ready.menu&&_ready.karyawan&&_ready.jamPesan;
+    if(critical&&!_allReady){
+      _allReady=true;
+      scheduleRender();
+    }
+    // Timeout safety: render paksa setelah 4 detik meski belum semua ready
+    if(doneCount===1){
+      setTimeout(function(){
+        if(!_allReady){_allReady=true;scheduleRender();}
+      },4000);
+    }
+  }
+
+  var refs={karyawan:db.ref('karyawan'),menu:db.ref('menu'),pesanan:db.ref('pesanan'),tagihan:db.ref('tagihan'),jadwal:db.ref('jadwal'),jamPesan:db.ref('jamPesan'),rating:db.ref('rating'),lunasBayar:db.ref('lunasBayar'),lunasHistory:db.ref('lunasHistory')};
   var prevCount=cache.pesanan.length;
-  var h1=refs.karyawan.on('value',function(s){cache.karyawan=s.exists()?Object.values(s.val()):[];renderLoginNama();if(currentRole==='admin'&&activeAdminTab==='akun')renderAdminTab('akun');});
-  var h2=refs.menu.on('value',function(s){cache.menu=s.exists()?Object.values(s.val()):[];if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');if(currentRole==='karyawan')renderKaryawan();});
+
+  var h1=refs.karyawan.on('value',function(s){
+    cache.karyawan=s.exists()?Object.values(s.val()):[];
+    renderLoginNama();
+    if(currentRole==='admin'&&activeAdminTab==='akun')renderAdminTab('akun');
+    markReady('karyawan');
+    if(_allReady&&currentRole==='karyawan')scheduleRender();
+  });
+  var h2=refs.menu.on('value',function(s){
+    cache.menu=s.exists()?Object.values(s.val()):[];
+    if(_allReady){
+      if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');
+      else if(currentRole==='karyawan')scheduleRender();
+    }
+    markReady('menu');
+  });
   var h3=refs.pesanan.on('value',function(s){
     var newP=s.exists()?Object.values(s.val()):[];
-    if(currentRole==='warmindo'&&newP.length>prevCount){var n=newP.filter(function(p){return p.tanggal===today()&&p.status==='Menunggu';});if(n.length>0){sendBrowserNotif('🍱 Pesanan Baru!',n[n.length-1].karyawan+' memesan '+n[n.length-1].menu);if(_suaraAktif)playSound('pesanan_baru');}}
-    if(currentRole==='karyawan'&&currentUser){newP.forEach(function(np){var old=cache.pesanan.find(function(p){return p.id===np.id;});if(old&&old.status!==np.status&&np.kid===currentUser.id){sendBrowserNotif('🍽️ Status Pesanan',np.menu+' → '+np.status);if(_suaraAktif)playSound('status_update');}});}
-    prevCount=newP.length;cache.pesanan=newP;
-    if(currentRole==='warmindo')renderWarmindo();
-    if(currentRole==='admin')renderAdminTab(activeAdminTab);
-    if(currentRole==='karyawan')renderKaryawan();
-  });
-  var h4=refs.tagihan.on('value',function(s){cache.tagihan=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');if(currentRole==='karyawan')renderKaryawan();});
-  var h5=refs.jadwal.on('value',function(s){cache.jadwal=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='jadwal')renderAdminTab('jadwal');if(currentRole==='karyawan')renderKaryawan();});
-  var h6=refs.jamPesan.on('value',function(s){cache.jamPesan=s.exists()?s.val():{buka:'07:00',tutup:'10:00',aktif:1};if(currentRole==='karyawan')renderKaryawan();if(currentRole==='warmindo')renderWarmindo();});
-  var h7=refs.rating.on('value',function(s){cache.rating=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');if(currentRole==='warmindo')renderWarmindo();});
-  var h8=refs.lunasHistory.on('value',function(s){cache.lunasHistory=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');if(currentRole==='karyawan')renderKaryawan();});
-  var h9=refs.lunasBayar.on('value',function(s){cache.lunasBayar=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');if(currentRole==='karyawan')renderKaryawan();});
-  var h10=refs.chatPesan.on('value',function(s){
-    var newChat=s.exists()?(s.val()||{}):{};
-    // Deteksi pesan baru untuk karyawan yang sedang login
-    if(currentRole==='karyawan'&&currentUser){
-      var oldChat=cache.chatPesan||{};
-      Object.values(newChat).forEach(function(msg){
-        if(!oldChat[msg.id]&&msg.dari==='warmindo'&&msg.kid===currentUser.id){
-          sendBrowserNotif('💬 Pesan dari Warmindo',msg.teks);
-          if(_suaraAktif)playSound('status_update');
-          showToast('💬 Ada pesan dari Warmindo!','warn');
+    if(_allReady){
+      // Notifikasi pesanan baru
+      if(currentRole==='warmindo'&&newP.length>prevCount){
+        var n=newP.filter(function(p){return p.tanggal===today()&&p.status==='Menunggu';});
+        if(n.length>0){
+          sendBrowserNotif('🍱 Pesanan Baru!',n[n.length-1].karyawan+' memesan '+n[n.length-1].menu);
+          if(_suaraAktif)playSound('pesanan_baru');
         }
-      });
+      }
+      // Notifikasi status berubah untuk karyawan
+      if(currentRole==='karyawan'&&currentUser){
+        newP.forEach(function(np){
+          var old=cache.pesanan.find(function(p){return p.id===np.id;});
+          if(old&&old.status!==np.status&&np.kid===currentUser.id){
+            sendBrowserNotif('🍽️ Status Pesanan',np.menu+' → '+np.status);
+            if(_suaraAktif)playSound('status_update');
+          }
+        });
+      }
     }
-    // Deteksi pesan baru untuk warmindo
-    if(currentRole==='warmindo'){
-      var oldChat2=cache.chatPesan||{};
-      Object.values(newChat).forEach(function(msg){
-        if(!oldChat2[msg.id]&&msg.dari==='karyawan'){
-          sendBrowserNotif('💬 Balasan dari '+msg.namaKaryawan,msg.teks);
-          if(_suaraAktif)playSound('status_update');
-          showToast('💬 Balasan dari '+msg.namaKaryawan+'!','warn');
-        }
-      });
-    }
-    cache.chatPesan=newChat;
-    // Re-render chat bubble yang sedang terbuka
-    if(_openChatPid){
-      var chatBoxEl=document.getElementById('chat-box-'+_openChatPid);
-      if(chatBoxEl)renderChatBox(_openChatPid,chatBoxEl);
-      // Update unread badge semua kartu
-      _refreshChatBadges();
-    }
+    prevCount=newP.length;
+    cache.pesanan=newP;
+    markReady('pesanan');
+    if(_allReady)scheduleRender();
   });
-  listeners=[{ref:refs.karyawan,event:'value',handler:h1},{ref:refs.menu,event:'value',handler:h2},{ref:refs.pesanan,event:'value',handler:h3},{ref:refs.tagihan,event:'value',handler:h4},{ref:refs.jadwal,event:'value',handler:h5},{ref:refs.jamPesan,event:'value',handler:h6},{ref:refs.rating,event:'value',handler:h7},{ref:refs.lunasHistory,event:'value',handler:h8},{ref:refs.lunasBayar,event:'value',handler:h9},{ref:refs.chatPesan,event:'value',handler:h10}];
+  var h4=refs.tagihan.on('value',function(s){
+    cache.tagihan=s.exists()?(s.val()||{}):{};
+    if(_allReady&&currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');
+    markReady('tagihan');
+  });
+  var h5=refs.jadwal.on('value',function(s){
+    cache.jadwal=s.exists()?(s.val()||{}):{};
+    if(_allReady&&currentRole==='admin'&&activeAdminTab==='jadwal')renderAdminTab('jadwal');
+    markReady('jadwal');
+  });
+  var h6=refs.jamPesan.on('value',function(s){
+    cache.jamPesan=s.exists()?s.val():{buka:'07:00',tutup:'10:00',aktif:1};
+    markReady('jamPesan');
+    if(_allReady)scheduleRender();
+  });
+  var h7=refs.rating.on('value',function(s){
+    cache.rating=s.exists()?(s.val()||{}):{};
+    if(_allReady){
+      if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');
+      else if(currentRole==='warmindo')scheduleRender();
+    }
+    markReady('rating');
+  });
+  var h8=refs.lunasHistory.on('value',function(s){
+    cache.lunasHistory=s.exists()?(s.val()||{}):{};
+    if(_allReady&&currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');
+    markReady('lunasHistory');
+  });
+  var h9=refs.lunasBayar.on('value',function(s){
+    cache.lunasBayar=s.exists()?(s.val()||{}):{};
+    if(_allReady&&currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');
+    if(_allReady&&currentRole==='karyawan')scheduleRender();
+    markReady('lunasBayar');
+  });
+
+  listeners=[
+    {ref:refs.karyawan,event:'value',handler:h1},{ref:refs.menu,event:'value',handler:h2},
+    {ref:refs.pesanan,event:'value',handler:h3},{ref:refs.tagihan,event:'value',handler:h4},
+    {ref:refs.jadwal,event:'value',handler:h5},{ref:refs.jamPesan,event:'value',handler:h6},
+    {ref:refs.rating,event:'value',handler:h7},{ref:refs.lunasHistory,event:'value',handler:h8},
+    {ref:refs.lunasBayar,event:'value',handler:h9}
+  ];
 }
 function clearListeners(){listeners.forEach(function(l){l.ref.off(l.event,l.handler);});listeners=[];}
 
@@ -619,101 +668,80 @@ function clearListeners(){listeners.forEach(function(l){l.ref.off(l.event,l.hand
 //  NOTIF
 // ─────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────
-//  SUARA NOTIFIKASI
-//  - pesanan_baru (warmindo only): chime + TTS suara Indonesia
-//  - lainnya: Web Audio API nada
+//  SUARA NOTIFIKASI (Web Audio API — tanpa file eksternal)
 // ─────────────────────────────────────────────────────────
 var _audioCtx=null;
 var _audioUnlocked=false;
 
+// Unlock AudioContext saat pertama kali user interaksi
 function unlockAudio(){
   if(_audioUnlocked)return;
   try{
     _audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+    // Mainkan suara senyap untuk unlock
     var buf=_audioCtx.createBuffer(1,1,22050);
     var src=_audioCtx.createBufferSource();
     src.buffer=buf;src.connect(_audioCtx.destination);src.start(0);
     _audioUnlocked=true;
+    console.log('[Audio] Unlocked, state:',_audioCtx.state);
   }catch(e){console.warn('[Audio] Unlock gagal:',e);}
 }
+// Daftarkan unlock di setiap interaksi
 ['touchstart','touchend','mousedown','keydown','click'].forEach(function(ev){
   document.addEventListener(ev,unlockAudio,{once:false,passive:true});
 });
 
-// ── TTS helper — khusus warmindo, ucapkan teks dengan suara Indonesia ──
-function _speakWarmindo(teks){
-  if(!('speechSynthesis' in window)){return;}
-  // Batalkan ucapan sebelumnya agar tidak tumpuk
-  window.speechSynthesis.cancel();
-  var u=new SpeechSynthesisUtterance(teks);
-  u.lang='id-ID';
-  u.rate=0.95;   // sedikit lebih lambat agar jelas
-  u.pitch=1.1;
-  u.volume=1;
-  // Pilih suara Bahasa Indonesia jika browser punya
-  var _setVoiceAndSpeak=function(){
-    var voices=window.speechSynthesis.getVoices();
-    var idVoice=voices.find(function(v){return v.lang==='id-ID';})
-               ||voices.find(function(v){return v.lang.startsWith('id');});
-    if(idVoice)u.voice=idVoice;
-    try{window.speechSynthesis.speak(u);}catch(e){console.warn('[TTS] gagal:',e);}
-  };
-  // getVoices() async di beberapa browser — tunggu jika perlu
-  if(window.speechSynthesis.getVoices().length>0){
-    _setVoiceAndSpeak();
-  } else {
-    window.speechSynthesis.onvoiceschanged=function(){
-      window.speechSynthesis.onvoiceschanged=null;
-      _setVoiceAndSpeak();
-    };
-  }
+// ─── TEXT-TO-SPEECH NOTIFIKASI ───
+var _ttsQueue=[];var _ttsBusy=false;
+function speakTTS(text){
+  if(!window.speechSynthesis)return;
+  _ttsQueue.push(text);
+  if(!_ttsBusy)_processTTSQueue();
 }
+function _processTTSQueue(){
+  if(_ttsQueue.length===0){_ttsBusy=false;return;}
+  _ttsBusy=true;
+  var utt=new SpeechSynthesisUtterance(_ttsQueue.shift());
+  utt.lang='id-ID';utt.rate=0.92;utt.pitch=1.05;utt.volume=1;
+  var voices=window.speechSynthesis.getVoices();
+  var idVoice=voices.find(function(v){return v.lang==='id-ID';})
+    ||voices.find(function(v){return v.lang.startsWith('id');});
+  if(idVoice)utt.voice=idVoice;
+  utt.onend=function(){setTimeout(_processTTSQueue,300);};
+  utt.onerror=function(){_ttsBusy=false;_processTTSQueue();};
+  window.speechSynthesis.speak(utt);
+}
+if(window.speechSynthesis)window.speechSynthesis.onvoiceschanged=function(){window.speechSynthesis.getVoices();};
 
 function playSound(type){
   if(!_suaraAktif)return;
-
-  // ── PESANAN BARU: khusus warmindo pakai chime + TTS ──
-  if(type==='pesanan_baru' && currentRole==='warmindo'){
-    // 1) Chime singkat dulu (ding-ding)
-    if(!_audioCtx){try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}}
-    if(_audioCtx){
-      var _doChime=function(){
-        try{
-          var ctx=_audioCtx;
-          [880,1108].forEach(function(freq,i){
-            var o=ctx.createOscillator(),g=ctx.createGain();
-            o.connect(g);g.connect(ctx.destination);
-            o.type='sine';o.frequency.value=freq;
-            var t=ctx.currentTime+i*0.18;
-            g.gain.setValueAtTime(0,t);
-            g.gain.linearRampToValueAtTime(0.45,t+0.03);
-            g.gain.exponentialRampToValueAtTime(0.001,t+0.4);
-            o.start(t);o.stop(t+0.41);
-          });
-        }catch(e){}
-      };
-      if(_audioCtx.state==='suspended'){
-        _audioCtx.resume().then(_doChime);
-      } else {
-        _doChime();
-      }
-    }
-    // 2) TTS setelah chime selesai (~400ms)
-    setTimeout(function(){
-      _speakWarmindo('Ada pesanan baru, yuk langsung diproses!');
-    },450);
-    return;
-  }
-
-  // ── SUARA LAIN: tetap pakai Web Audio API ──
+  // Coba unlock dulu jika belum
   if(!_audioCtx){
     try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();}
     catch(e){console.warn('[Audio] Tidak bisa buat AudioContext:',e);return;}
   }
   var ctx=_audioCtx;
+  // Resume jika suspended (autoplay policy browser)
   var doPlay=function(){
     try{
-      if(type==='status_update'){
+      if(type==='pesanan_baru'){
+        // Ding-dong naik: C5 E5 G5 C6
+        [523,659,784,1047].forEach(function(freq,i){
+          var o=ctx.createOscillator(),g=ctx.createGain();
+          o.connect(g);g.connect(ctx.destination);
+          o.type='sine';o.frequency.value=freq;
+          var t=ctx.currentTime+i*0.15;
+          g.gain.setValueAtTime(0,t);
+          g.gain.linearRampToValueAtTime(0.4,t+0.05);
+          g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
+          o.start(t);o.stop(t+0.36);
+        });
+        // TTS setelah ding-dong selesai (~700ms)
+        setTimeout(function(){
+          speakTTS('Ada pesanan baru, yuk langsung diproses!');
+        },700);
+      } else if(type==='status_update'){
+        // Ping naik singkat
         var o=ctx.createOscillator(),g=ctx.createGain();
         o.connect(g);g.connect(ctx.destination);
         o.type='sine';
@@ -723,6 +751,7 @@ function playSound(type){
         g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.3);
         o.start(ctx.currentTime);o.stop(ctx.currentTime+0.31);
       } else if(type==='pesanan_kirim'){
+        // 3 nada konfirmasi
         [440,554,659].forEach(function(freq,i){
           var o=ctx.createOscillator(),g=ctx.createGain();
           o.connect(g);g.connect(ctx.destination);
@@ -734,7 +763,7 @@ function playSound(type){
           o.start(t);o.stop(t+0.23);
         });
       } else if(type==='test'){
-        // Saat test (warmindo): chime + TTS perkenalan
+        // Suara test saat toggle aktifkan
         [523,659,784].forEach(function(freq,i){
           var o=ctx.createOscillator(),g=ctx.createGain();
           o.connect(g);g.connect(ctx.destination);
@@ -745,24 +774,10 @@ function playSound(type){
           g.gain.exponentialRampToValueAtTime(0.001,t+0.25);
           o.start(t);o.stop(t+0.26);
         });
-        if(currentRole==='warmindo'){
-          setTimeout(function(){_speakWarmindo('Suara notifikasi aktif!');},400);
-        }
-      } else if(type==='pesanan_baru'){
-        // Fallback jika bukan warmindo — nada biasa
-        [523,659,784,1047].forEach(function(freq,i){
-          var o=ctx.createOscillator(),g=ctx.createGain();
-          o.connect(g);g.connect(ctx.destination);
-          o.type='sine';o.frequency.value=freq;
-          var t=ctx.currentTime+i*0.15;
-          g.gain.setValueAtTime(0,t);
-          g.gain.linearRampToValueAtTime(0.4,t+0.05);
-          g.gain.exponentialRampToValueAtTime(0.001,t+0.35);
-          o.start(t);o.stop(t+0.36);
-        });
       }
     }catch(e){console.warn('[Audio] playSound error:',e);}
   };
+
   if(ctx.state==='suspended'){
     ctx.resume().then(doPlay).catch(function(e){console.warn('[Audio] resume gagal:',e);});
   } else {
@@ -944,15 +959,10 @@ function renderKaryawan(){
       if(p.status==='Menunggu')batalBtn='<button onclick="batalPesananById(\''+p.id+'\')" style="font-size:11px;font-weight:700;color:rgba(255,255,255,.75);border:none;background:rgba(255,255,255,.2);padding:3px 10px;border-radius:99px;cursor:pointer;font-family:inherit;margin-left:6px">✕ Batal</button>';
       var ratingBtn='';
       if(p.status==='Selesai'&&!cache.rating[p.id])ratingBtn='<button onclick="openRating(\''+p.id+'\',\''+p.menu+'\')" style="font-size:11px;font-weight:700;color:rgba(255,255,255,.75);border:none;background:rgba(255,255,255,.2);padding:3px 10px;border-radius:99px;cursor:pointer;font-family:inherit;margin-left:6px">⭐ Rating</button>';
-      var unread=getUnreadCountForPid(p.id);
-      var chatBtnClass='chat-toggle-btn'+(unread>0?' has-unread':'');
-      var chatBtn='<button class="'+chatBtnClass+'" data-chat-pid="'+p.id+'" onclick="toggleChatKaryawan(\''+p.id+'\')">💬 '+(unread>0?'Pesan ('+unread+')':'Chat')+'</button>';
       itemsHtml+='<div class="success-item">'
-        +'<div style="flex:1"><div style="font-size:14px;font-weight:700;color:#fff">'+p.menu+(p.qty>1?' ×'+p.qty:'')+'</div>'
+        +'<div><div style="font-size:14px;font-weight:700;color:#fff">'+p.menu+(p.qty>1?' ×'+p.qty:'')+'</div>'
         +(p.catatan?'<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">📝 '+p.catatan+'</div>':'')
-        +'<div style="margin-top:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="badge '+p.status.toLowerCase()+'">'+p.status+'</span>'+batalBtn+ratingBtn+chatBtn+'</div>'
-        +'<div id="k-chat-box-'+p.id+'" style="display:none;margin-top:8px"></div>'
-        +'</div>'
+        +'<div style="margin-top:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="badge '+p.status.toLowerCase()+'">'+p.status+'</span>'+batalBtn+ratingBtn+'</div></div>'
         +'<div style="text-align:right;flex-shrink:0"><div style="font-size:14px;font-weight:800;color:#fff">'+rp(p.harga)+'</div></div></div>';
     });
 
@@ -1412,8 +1422,6 @@ function renderWarmindo(){
 
 function renderPesananCard(p){
   var ini=inisial(p.karyawan);var next=p.status==='Menunggu'?'Diproses':p.status==='Diproses'?'Selesai':null;var btnClass=p.status==='Menunggu'?'proses':'done';
-  var unread=getUnreadCountForPid(p.id);
-  var chatBtnClass='chat-toggle-btn'+(unread>0?' has-unread':'');
   return'<div class="pesanan-card fade-in">'
     +'<div class="pesanan-card-header"><div class="pesanan-avatar">'+ini+'</div>'
     +'<div style="flex:1"><div style="font-size:15px;font-weight:700">'+p.karyawan+'</div>'
@@ -1421,12 +1429,8 @@ function renderPesananCard(p){
     +(p.catatan?'<div style="font-size:11px;color:var(--text3);margin-top:3px">📝 '+p.catatan+'</div>':'')
     +'</div><span class="badge '+p.status.toLowerCase()+'">'+p.status+'</span></div>'
     +'<div class="pesanan-card-footer"><div style="font-size:15px;font-weight:800">'+rp(p.harga)+'</div>'
-    +'<div style="display:flex;gap:6px;align-items:center">'
-    +'<button class="'+chatBtnClass+'" data-chat-pid="'+p.id+'" onclick="toggleChat(\''+p.id+'\',\''+p.kid+'\',\''+escAttr(p.karyawan)+'\')">💬 '+(unread>0?'Pesan ('+unread+')':'Chat')+'</button>'
-    +(next?'<button class="btn-status '+btnClass+'" onclick="updateStatus(\''+p.id+'\',\''+next+'\')">'+next+' →</button>':'<div style="font-size:12px;font-weight:600;color:var(--green)">✓ Selesai</div>')
-    +'</div></div>'
-    +'<div id="chat-box-'+p.id+'" style="display:none;padding:0 14px 12px"></div>'
-    +'</div>';
+    +(next?'<button class="btn-status '+btnClass+'" onclick="updateStatus(\''+p.id+'\',\''+next+'\')">Tandai '+next+' →</button>':'<div style="font-size:12px;font-weight:600;color:var(--green)">✓ Sudah selesai</div>')
+    +'</div></div>';
 }
 function updateStatus(id,s){db.ref('pesanan/'+id+'/status').set(s).then(function(){showToast('Status: '+s);});}
 
@@ -2576,190 +2580,6 @@ function importMenuExcel(){
     }
   };
   reader.readAsText(file,'UTF-8');
-}
-
-// ─────────────────────────────────────────────────────────
-//  CHAT / PESAN PESANAN
-// ─────────────────────────────────────────────────────────
-var _openChatPid=null; // pid chat yang sedang terbuka
-
-function getChatByPid(pid){
-  return Object.values(cache.chatPesan||{}).filter(function(m){return m.pid===pid;}).sort(function(a,b){return a.ts-b.ts;});
-}
-
-function getUnreadCountForPid(pid){
-  // Pesan yang belum dibaca (ditandai dgn readBy tidak mengandung currentRole)
-  if(!currentRole)return 0;
-  return getChatByPid(pid).filter(function(m){
-    return m.dari!==currentRole&&!(m.readBy&&m.readBy[currentRole]);
-  }).length;
-}
-
-function markChatRead(pid){
-  var msgs=getChatByPid(pid).filter(function(m){
-    return m.dari!==currentRole&&!(m.readBy&&m.readBy[currentRole]);
-  });
-  if(msgs.length===0)return;
-  var updates={};
-  msgs.forEach(function(m){
-    updates['chatPesan/'+m.id+'/readBy/'+currentRole]=true;
-  });
-  db.ref().update(updates);
-}
-
-function toggleChat(pid,kid,namaKaryawan){
-  var box=document.getElementById('chat-box-'+pid);
-  if(!box)return;
-  if(_openChatPid&&_openChatPid!==pid){
-    // Tutup yang lain
-    var oldBox=document.getElementById('chat-box-'+_openChatPid);
-    if(oldBox)oldBox.style.display='none';
-  }
-  var isOpen=box.style.display!=='none'&&box.style.display!=='';
-  if(isOpen){
-    box.style.display='none';
-    _openChatPid=null;
-  } else {
-    box.style.display='block';
-    _openChatPid=pid;
-    renderChatBox(pid,box,kid,namaKaryawan);
-    markChatRead(pid);
-    _refreshChatBadges();
-    // Fokus ke input
-    setTimeout(function(){var inp=document.getElementById('chat-inp-'+pid);if(inp)inp.focus();},100);
-  }
-}
-
-function renderChatBox(pid,boxEl,kid,namaKaryawan){
-  var msgs=getChatByPid(pid);
-  var msgsHtml=msgs.length===0
-    ?'<div class="chat-empty">💬 Belum ada pesan. Kirim pesan pertama!</div>'
-    :msgs.map(function(m){
-      var isMe=(m.dari===currentRole);
-      var label=m.dari==='warmindo'?'👨‍🍳 Warmindo':'👤 '+m.namaKaryawan;
-      return'<div class="chat-msg '+m.dari+'">'
-        +(isMe?'':'<div style="width:28px;height:28px;background:var(--orange-light);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:var(--orange);flex-shrink:0">'+(m.dari==='warmindo'?'W':inisial(m.namaKaryawan||'?'))+'</div>')
-        +'<div>'
-        +(!isMe?'<div class="chat-sender">'+label+'</div>':'')
-        +'<div class="chat-bubble">'+escHtml(m.teks)+'</div>'
-        +'<div style="text-align:'+(isMe?'right':'left')+';margin-top:2px"><span class="chat-time">'+m.waktu+'</span></div>'
-        +'</div>'
-        +(isMe?'<div style="width:28px;height:28px;background:'+(currentRole==='warmindo'?'#1a1a2e':'var(--orange)')+';border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0">'+(currentRole==='warmindo'?'W':inisial(currentUser.nama||'?'))+'</div>':'')
-        +'</div>';
-    }).join('');
-
-  // Simpan kid dan namaKaryawan di data attribute jika diberikan
-  if(kid)boxEl.dataset.kid=kid;
-  if(namaKaryawan)boxEl.dataset.nama=namaKaryawan;
-  var _kid=boxEl.dataset.kid||'';
-  var _nama=boxEl.dataset.nama||'';
-
-  boxEl.innerHTML='<div class="chat-box">'
-    +'<div style="font-size:11px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">💬 Pesan Pesanan</div>'
-    +'<div id="chat-msgs-'+pid+'" style="max-height:200px;overflow-y:auto;padding-bottom:4px">'+msgsHtml+'</div>'
-    +'<div class="chat-input-row">'
-    +'<input type="text" id="chat-inp-'+pid+'" placeholder="Tulis pesan..." maxlength="200"'
-    +' onkeydown="if(event.key===\'Enter\')kirimChatMsg(\''+pid+'\',\''+_kid+'\',\''+escAttr(_nama)+'\')">'
-    +'<button class="chat-send-btn" onclick="kirimChatMsg(\''+pid+'\',\''+_kid+'\',\''+escAttr(_nama)+'\')">➤</button>'
-    +'</div></div>';
-
-  // Scroll ke bawah
-  setTimeout(function(){var el=document.getElementById('chat-msgs-'+pid);if(el)el.scrollTop=el.scrollHeight;},50);
-}
-
-function kirimChatMsg(pid,kid,namaKaryawan){
-  var inp=document.getElementById('chat-inp-'+pid);
-  if(!inp)return;
-  var teks=inp.value.trim();
-  if(!teks){showToast('Tulis pesan dulu');return;}
-  var mid='ch'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
-  var msg={
-    id:mid,pid:pid,kid:kid||'',
-    namaKaryawan:namaKaryawan||(currentRole==='karyawan'?currentUser.nama:''),
-    dari:currentRole,
-    teks:teks,
-    waktu:nowTime(),
-    ts:Date.now(),
-    readBy:{}
-  };
-  msg.readBy[currentRole]=true;
-  inp.value='';
-  db.ref('chatPesan/'+mid).set(msg).then(function(){
-    showToast('✅ Pesan terkirim','ok');
-    if(_suaraAktif)playSound('pesanan_kirim');
-  }).catch(function(e){showToast('Gagal kirim: '+e.message);});
-}
-
-function _refreshChatBadges(){
-  // Update semua tombol chat yang ada di DOM
-  document.querySelectorAll('[data-chat-pid]').forEach(function(btn){
-    var pid=btn.dataset.chatPid;
-    var unread=getUnreadCountForPid(pid);
-    var isOpen=_openChatPid===pid;
-    btn.className='chat-toggle-btn'+(unread>0&&!isOpen?' has-unread':'');
-    btn.innerHTML='💬 '+(unread>0&&!isOpen?'Pesan ('+unread+')':'Chat');
-  });
-}
-
-function escHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function escAttr(s){return(s||'').replace(/'/g,'&#39;').replace(/"/g,'&quot;');}
-
-function toggleChatKaryawan(pid){
-  var box=document.getElementById('k-chat-box-'+pid);
-  if(!box)return;
-  var isOpen=box.style.display!=='none'&&box.style.display!=='';
-  if(isOpen){
-    box.style.display='none';
-    if(_openChatPid===pid)_openChatPid=null;
-  } else {
-    box.style.display='block';
-    _openChatPid=pid;
-    // Render chat dalam konteks karyawan (background hijau gelap)
-    renderChatBoxKaryawan(pid,box);
-    markChatRead(pid);
-    _refreshChatBadgesKaryawan();
-    setTimeout(function(){var inp=document.getElementById('chat-inp-'+pid);if(inp)inp.focus();},100);
-  }
-}
-
-function renderChatBoxKaryawan(pid,boxEl){
-  var msgs=getChatByPid(pid);
-  var msgsHtml=msgs.length===0
-    ?'<div style="text-align:center;padding:14px 0;font-size:12px;color:rgba(255,255,255,.5);font-weight:600">💬 Belum ada pesan. Ketuk kirim untuk mulai!</div>'
-    :msgs.map(function(m){
-      var isMe=(m.dari==='karyawan');
-      return'<div style="display:flex;gap:6px;margin-bottom:6px;align-items:flex-end;'+(isMe?'flex-direction:row-reverse':'flex-direction:row')+'">'
-        +(!isMe?'<div style="width:26px;height:26px;background:rgba(255,255,255,.15);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0">W</div>':'')
-        +'<div>'
-        +(!isMe?'<div style="font-size:10px;font-weight:700;color:rgba(255,255,255,.6);margin-bottom:2px">👨‍🍳 Warmindo</div>':'')
-        +'<div style="max-width:200px;padding:8px 11px;border-radius:14px;font-size:13px;line-height:1.5;word-break:break-word;'
-        +(isMe?'background:rgba(255,255,255,.25);color:#fff;border-bottom-right-radius:4px':'background:rgba(255,255,255,.12);color:#fff;border-bottom-left-radius:4px;border:1px solid rgba(255,255,255,.2)')+'">'+escHtml(m.teks)+'</div>'
-        +'<div style="margin-top:2px;text-align:'+(isMe?'right':'left')+';font-size:10px;color:rgba(255,255,255,.45)">'+m.waktu+'</div>'
-        +'</div>'
-        +(isMe?'<div style="width:26px;height:26px;background:rgba(255,255,255,.25);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#fff;flex-shrink:0">'+inisial(currentUser.nama)+'</div>':'')
-        +'</div>';
-    }).join('');
-
-  boxEl.innerHTML='<div style="background:rgba(0,0,0,.2);border-radius:12px;padding:10px;border:1px solid rgba(255,255,255,.15)">'
-    +'<div style="font-size:10px;font-weight:800;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">💬 Pesan ke Warmindo</div>'
-    +'<div id="chat-msgs-'+pid+'" style="max-height:160px;overflow-y:auto;padding-bottom:4px">'+msgsHtml+'</div>'
-    +'<div style="display:flex;gap:6px;margin-top:8px;align-items:center">'
-    +'<input type="text" id="chat-inp-'+pid+'" placeholder="Tulis pesan..." maxlength="200"'
-    +' style="flex:1;padding:9px 13px;font-size:13px;border:1.5px solid rgba(255,255,255,.3);border-radius:99px;background:rgba(255,255,255,.15);color:#fff;font-family:inherit;outline:none"'
-    +' onkeydown="if(event.key===\'Enter\')kirimChatMsg(\''+pid+'\',\''+currentUser.id+'\',\''+escAttr(currentUser.nama)+'\')">'
-    +'<button style="width:36px;height:36px;border-radius:50%;border:none;background:rgba(255,255,255,.9);color:var(--orange);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0" onclick="kirimChatMsg(\''+pid+'\',\''+currentUser.id+'\',\''+escAttr(currentUser.nama)+'\')">➤</button>'
-    +'</div></div>';
-  setTimeout(function(){var el=document.getElementById('chat-msgs-'+pid);if(el)el.scrollTop=el.scrollHeight;},50);
-}
-
-function _refreshChatBadgesKaryawan(){
-  document.querySelectorAll('[data-chat-pid]').forEach(function(btn){
-    var pid=btn.dataset.chatPid;
-    var unread=getUnreadCountForPid(pid);
-    var isOpen=_openChatPid===pid;
-    btn.className='chat-toggle-btn'+(unread>0&&!isOpen?' has-unread':'');
-    btn.innerHTML='💬 '+(unread>0&&!isOpen?'Pesan ('+unread+')':'Chat');
-  });
 }
 
 // ─────────────────────────────────────────────────────────

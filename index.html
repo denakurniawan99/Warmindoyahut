@@ -390,7 +390,82 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
   </div>
 </div>
 
-<!-- MODAL GANTI PIN -->
+<!-- MODAL BAYAR TAGIHAN -->
+<div class="modal-overlay" id="modal-bayar">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="font-size:40px;margin-bottom:6px">💳</div>
+      <div style="font-size:17px;font-weight:800">Bayar Tagihan</div>
+      <div style="font-size:13px;color:var(--text3);margin-top:4px" id="bayar-nama-label">-</div>
+      <div style="font-size:22px;font-weight:800;color:var(--red);margin-top:6px" id="bayar-jumlah-label">-</div>
+    </div>
+    <!-- Tab pilih metode -->
+    <div style="display:flex;gap:6px;margin-bottom:16px" id="bayar-tab-row">
+      <div id="tab-qris" onclick="switchBayarTab('qris')"
+        style="flex:1;padding:10px;border-radius:10px;background:var(--orange);color:#fff;font-size:13px;font-weight:700;text-align:center;cursor:pointer">
+        📱 QRIS
+      </div>
+      <div id="tab-tf" onclick="switchBayarTab('tf')"
+        style="flex:1;padding:10px;border-radius:10px;background:var(--bg);color:var(--text3);border:1.5px solid var(--border);font-size:13px;font-weight:700;text-align:center;cursor:pointer">
+        🏦 Transfer Bank
+      </div>
+    </div>
+    <!-- Panel QRIS -->
+    <div id="panel-qris">
+      <div id="qris-display" style="text-align:center;margin-bottom:12px">
+        <div style="background:var(--bg);border-radius:12px;padding:16px;border:2px dashed var(--border)" id="qris-img-wrap">
+          <div style="font-size:13px;color:var(--text3)">QR Code belum diatur admin</div>
+        </div>
+      </div>
+      <div class="alert info" style="margin-bottom:12px">Scan QR di atas menggunakan aplikasi dompet digital (GoPay, OVO, Dana, ShopeePay, dll). Nominal sesuai tagihan kamu.</div>
+    </div>
+    <!-- Panel Transfer Bank -->
+    <div id="panel-tf" style="display:none">
+      <div id="tf-display" style="margin-bottom:12px">
+        <div style="background:var(--bg);border-radius:12px;padding:14px;border:1.5px solid var(--border)" id="tf-info-wrap">
+          <div style="font-size:13px;color:var(--text3);text-align:center">Info rekening belum diatur admin</div>
+        </div>
+      </div>
+      <div class="alert info" style="margin-bottom:12px">Transfer ke rekening di atas sesuai jumlah tagihan. Pastikan nominal tepat agar mudah diverifikasi.</div>
+    </div>
+    <!-- Upload bukti -->
+    <div style="border-top:1.5px dashed var(--border);padding-top:14px;margin-top:4px">
+      <div style="font-size:12px;font-weight:800;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📎 Kirim Bukti Pembayaran</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:10px;line-height:1.6">Setelah transfer/scan, screenshot bukti dan kirim ke admin lewat chat, atau ketik nominal yang sudah dibayar di bawah.</div>
+      <div class="fg" style="margin-bottom:10px">
+        <label>Nominal yang dibayar (Rp)</label>
+        <input type="number" id="bayar-nominal" placeholder="mis: 5000" inputmode="numeric">
+      </div>
+      <div class="fg" style="margin-bottom:12px">
+        <label>Catatan (opsional)</label>
+        <input type="text" id="bayar-catatan" placeholder="mis: sudah transfer via BCA">
+      </div>
+      <button class="btn primary" onclick="kirimBuktiPembayaran()" style="background:var(--green);box-shadow:0 4px 16px rgba(29,191,115,.35)">✅ Kirim Konfirmasi Pembayaran</button>
+      <button class="btn secondary" style="margin-top:8px" onclick="closeModal('modal-bayar')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PENGATURAN PEMBAYARAN (Admin) -->
+<div class="modal-overlay" id="modal-payment-settings">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div style="font-size:17px;font-weight:800;margin-bottom:16px">💳 Pengaturan Pembayaran</div>
+    <div class="section-label">📱 QRIS</div>
+    <div class="fg">
+      <label>URL Gambar QRIS</label>
+      <input type="text" id="ps-qris-url" placeholder="https://... (link gambar QR dari bank/dompet)">
+    </div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">Upload gambar QRIS statis ke Google Drive / ImgBB / link lainnya, lalu tempel URL-nya di sini.</div>
+    <div class="section-label">🏦 Transfer Bank</div>
+    <div class="fg"><label>Nama Bank</label><input type="text" id="ps-bank-nama" placeholder="mis: BCA, BRI, Mandiri, BNI"></div>
+    <div class="fg"><label>Nomor Rekening</label><input type="number" id="ps-bank-norek" placeholder="mis: 1234567890" inputmode="numeric"></div>
+    <div class="fg" style="margin-bottom:4px"><label>Atas Nama</label><input type="text" id="ps-bank-atasnama" placeholder="mis: PT Maju Jaya"></div>
+    <button class="btn primary" onclick="simpanPaymentSettings()" style="margin-top:8px">💾 Simpan Pengaturan</button>
+    <button class="btn secondary" style="margin-top:8px" onclick="closeModal('modal-payment-settings')">Batal</button>
+  </div>
+</div>
 <div class="modal-overlay" id="modal-pin">
   <div class="modal">
     <div class="modal-handle"></div>
@@ -949,6 +1024,7 @@ function renderKaryawan(){
       var chatBtn='<button class="'+chatBtnClass+'" data-chat-pid="'+p.id+'" onclick="toggleChatKaryawan(\''+p.id+'\')">💬 '+(unread>0?'Pesan ('+unread+')':'Chat')+'</button>';
       itemsHtml+='<div class="success-item">'
         +'<div style="flex:1"><div style="font-size:14px;font-weight:700;color:#fff">'+p.menu+(p.qty>1?' ×'+p.qty:'')+'</div>'
+        +(p.lokasi?'<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:rgba(255,255,255,.2);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">📍 '+p.lokasi+'</div>':'')
         +(p.catatan?'<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">📝 '+p.catatan+'</div>':'')
         +'<div style="margin-top:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="badge '+p.status.toLowerCase()+'">'+p.status+'</span>'+batalBtn+ratingBtn+chatBtn+'</div>'
         +'<div id="k-chat-box-'+p.id+'" style="display:none;margin-top:8px"></div>'
@@ -985,9 +1061,13 @@ function renderKaryawan(){
       +'<div style="font-size:24px">💳</div>'
       +'<div style="flex:1"><div style="font-size:12px;color:var(--red);font-weight:700;margin-bottom:2px">⚠️ Tagihan Over Budget Belum Lunas</div>'
       +'<div style="font-size:18px;font-weight:800;color:var(--red)">'+rp(tagihanAkumulasi)+'</div>'
-      +'<div style="font-size:11px;color:var(--text3);margin-top:2px">Hubungi admin untuk pelunasan</div>'
       +'</div>'
       +'<button onclick="toggleRincianKaryawan()" style="background:var(--red-light);border:1.5px solid #fcc;color:var(--red);font-size:11px;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer;font-family:inherit;flex-shrink:0" id="btn-rincian-k">📋 Rincian</button>'
+      +'</div>'
+      // Tombol bayar
+      +'<div style="display:flex;gap:8px;width:100%">'
+      +'<button onclick="openBayarModal()" style="flex:1;background:var(--orange);color:#fff;border:none;font-size:13px;font-weight:700;padding:10px;border-radius:10px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px">📱 Bayar via QRIS</button>'
+      +'<button onclick="openBayarModal(\'tf\')" style="flex:1;background:var(--blue-light);color:var(--blue);border:1.5px solid var(--blue);font-size:13px;font-weight:700;padding:10px;border-radius:10px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px">🏦 Transfer Bank</button>'
       +'</div>'
       +'<div id="rincian-karyawan" style="display:none;width:100%">'+buildRincianOverPerHari(currentUser.id)+'</div>'
       +'</div>';
@@ -1052,6 +1132,11 @@ function renderKaryawan(){
       +'<div id="k-selisih-row" style="display:none;justify-content:space-between;font-size:13px;margin-bottom:6px"><span style="color:var(--text2)">Tagihan kamu</span><span style="font-weight:800;color:var(--red)" id="k-total-selisih">-</span></div>'
       +'<div id="k-gratis-row" style="display:none;font-size:12px;color:var(--green);font-weight:600;padding:4px 0">✓ Gratis penuh — dalam jatah harian</div>'
       +'</div>'
+      +'<div class="fg" style="margin-top:4px"><label>📍 Antar ke Lokasi</label>'
+      +'<div style="display:flex;gap:8px" id="k-lokasi-wrap">'
+      +'<div class="lokasi-btn active" id="lok-beji" onclick="pilihLokasi(\'Kantor Beji\')" style="flex:1;padding:10px 8px;border-radius:10px;background:var(--orange);color:#fff;font-size:12px;font-weight:700;text-align:center;cursor:pointer;border:2px solid var(--orange)">🏢 Kantor Beji</div>'
+      +'<div class="lokasi-btn" id="lok-a3" onclick="pilihLokasi(\'Kantor A3\')" style="flex:1;padding:10px 8px;border-radius:10px;background:#fff;color:var(--text3);font-size:12px;font-weight:700;text-align:center;cursor:pointer;border:2px solid var(--border)">🏢 Kantor A3</div>'
+      +'</div></div>'
       +'<div class="fg" style="margin-top:4px"><label>Catatan (opsional)</label><input type="text" id="k-catatan" placeholder="mis: tidak pedas, tambah kerupuk..."></div>'
       +'<button class="btn primary" style="margin-top:4px" onclick="kirimPesan()">🚀 Kirim Pesanan</button>'
       +'</div></div>';
@@ -1126,6 +1211,20 @@ function renderMenuCards(menuList){
 }
 
 function tambahItem(mid){ubahQty(mid,1);}
+var _lokasiAntar='Kantor Beji';
+function pilihLokasi(lok){
+  _lokasiAntar=lok;
+  var btns=['lok-beji','lok-a3'];
+  var vals=['Kantor Beji','Kantor A3'];
+  btns.forEach(function(id,i){
+    var el=document.getElementById(id);if(!el)return;
+    var active=vals[i]===lok;
+    el.style.background=active?'var(--orange)':'#fff';
+    el.style.color=active?'#fff':'var(--text3)';
+    el.style.border=active?'2px solid var(--orange)':'2px solid var(--border)';
+  });
+}
+
 function scrollToCart(){var el=document.getElementById('k-ringkasan');if(el)el.scrollIntoView({behavior:'smooth'});}
 
 // ─── FILTER MENU KARYAWAN ───
@@ -1231,6 +1330,7 @@ function kirimPesan(){
   var now=new Date();
   var jam=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
   var catatan=(document.getElementById('k-catatan')||{}).value||'';
+  var lokasi=_lokasiAntar||'Kantor Beji';
   var updates={};
   var totalHarga=items.reduce(function(a,pair){var m=cache.menu.find(function(x){return x.id===pair[0];});return a+(m?m.harga*pair[1]:0);},0);
 
@@ -1265,7 +1365,7 @@ function kirimPesan(){
     sisaBeban-=beban;
     var selisih=harga-beban;
     var pid='p'+Date.now()+'_'+pair[0]+'_'+Math.random().toString(36).slice(2,6);
-    updates['pesanan/'+pid]={id:pid,kid:currentUser.id,karyawan:currentUser.nama,menu:m.nama,qty:pair[1],harga:harga,selisih:selisih,beban:beban,catatan:catatan,waktu:jam,tanggal:today(),status:'Menunggu'};
+    updates['pesanan/'+pid]={id:pid,kid:currentUser.id,karyawan:currentUser.nama,menu:m.nama,qty:pair[1],harga:harga,selisih:selisih,beban:beban,catatan:catatan,lokasi:lokasi,waktu:jam,tanggal:today(),status:'Menunggu'};
   });
 
   // Update tagihan dengan nilai yang benar (akumulatif)
@@ -1323,26 +1423,55 @@ function renderWarmindo(){
   var ratingByMenu={};Object.values(cache.rating).forEach(function(r){if(!ratingByMenu[r.menu])ratingByMenu[r.menu]=[];ratingByMenu[r.menu].push(r.nilai);});
   var ratingHtml='';
   if(Object.keys(ratingByMenu).length>0){
-    // Urutkan menu berdasarkan avg rating tertinggi
     var sortedMenus=Object.entries(ratingByMenu).sort(function(a,b){
       var avgA=a[1].reduce(function(x,y){return x+y;},0)/a[1].length;
       var avgB=b[1].reduce(function(x,y){return x+y;},0)/b[1].length;
       return avgB-avgA;
     });
-    ratingHtml='<div class="section-label">⭐ Rating Menu</div><div class="card" style="padding:8px 0">';
-    sortedMenus.forEach(function(e){
-      var avg=(e[1].reduce(function(a,b){return a+b;},0)/e[1].length).toFixed(1);
-      var barW=Math.round((avg/5)*100);
-      ratingHtml+='<div class="list-row" style="flex-direction:column;align-items:flex-start;gap:4px">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;width:100%">'
-        +'<div style="display:flex;align-items:center;gap:8px"><span>'+getEmoji(e[0])+'</span><div style="font-size:14px;font-weight:700">'+e[0]+'</div></div>'
-        +'<div style="text-align:right"><div style="font-size:13px;font-weight:800;color:var(--yellow)">'+renderStars(avg)+'</div>'
-        +'<div style="font-size:11px;color:var(--text3)">'+avg+'/5 · '+e[1].length+' ulasan</div></div></div>'
-        +'<div style="width:100%;height:5px;background:var(--border);border-radius:99px;overflow:hidden">'
-        +'<div style="width:'+barW+'%;height:100%;background:var(--yellow);border-radius:99px;transition:.3s"></div></div>'
-        +'</div>';
-    });
-    ratingHtml+='</div>';
+    // Hitung rata-rata keseluruhan
+    var allNilai=Object.values(cache.rating).map(function(r){return r.nilai;});
+    var avgAll=(allNilai.reduce(function(a,b){return a+b;},0)/allNilai.length).toFixed(1);
+    var topMenu=sortedMenus[0];
+    var topAvg=(topMenu[1].reduce(function(a,b){return a+b;},0)/topMenu[1].length).toFixed(1);
+
+    // Summary collapsed (selalu tampil)
+    ratingHtml='<div class="section-label">⭐ Rating Menu</div>'
+      +'<div class="card" style="padding:12px 14px">'
+      // Summary row
+      +'<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleRatingDetail()">'
+      +'<div style="display:flex;gap:12px;align-items:center">'
+      +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:var(--yellow)">'+avgAll+'</div><div style="font-size:10px;color:var(--text3);font-weight:600">RATA-RATA</div></div>'
+      +'<div style="width:1px;height:36px;background:var(--border)"></div>'
+      +'<div><div style="font-size:12px;font-weight:700">🏆 '+topMenu[0]+'</div><div style="font-size:11px;color:var(--yellow)">'+renderStars(topAvg)+' terfavorit</div></div>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px">'
+      +'<div style="font-size:11px;color:var(--text3)">'+sortedMenus.length+' menu</div>'
+      +'<button id="rating-toggle-btn" style="background:var(--bg);border:1.5px solid var(--border);border-radius:8px;padding:4px 10px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;color:var(--text2)">Lihat ▾</button>'
+      +'</div></div>'
+      // Detail (collapsed by default)
+      +'<div id="rating-detail" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">'
+      // Filter bintang
+      +'<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'
+      +['Semua','⭐⭐⭐⭐⭐','⭐⭐⭐⭐','⭐⭐⭐','⭐⭐','⭐'].map(function(f,i){
+        var minVal=i===0?0:6-i;
+        var maxVal=i===0?5:6-i;
+        return'<div class="chip'+(i===0?' active':'')+'" onclick="filterRatingMin('+minVal+','+maxVal+',this)" style="font-size:11px;padding:4px 10px">'+f+'</div>';
+      }).join('')
+      +'</div>'
+      +'<div id="rating-menu-list">'
+      +sortedMenus.map(function(e){
+        var avg=(e[1].reduce(function(a,b){return a+b;},0)/e[1].length).toFixed(1);
+        var barW=Math.round((avg/5)*100);
+        return'<div class="list-row rating-item" data-avg="'+avg+'" style="flex-direction:column;align-items:flex-start;gap:4px">'
+          +'<div style="display:flex;align-items:center;justify-content:space-between;width:100%">'
+          +'<div style="display:flex;align-items:center;gap:8px"><span>'+getEmoji(e[0])+'</span><div style="font-size:13px;font-weight:700">'+e[0]+'</div></div>'
+          +'<div style="text-align:right"><div style="font-size:12px;font-weight:800;color:var(--yellow)">'+renderStars(avg)+' '+avg+'</div>'
+          +'<div style="font-size:10px;color:var(--text3)">'+e[1].length+' ulasan</div></div></div>'
+          +'<div style="width:100%;height:4px;background:var(--border);border-radius:99px;overflow:hidden">'
+          +'<div style="width:'+barW+'%;height:100%;background:var(--yellow);border-radius:99px"></div></div>'
+          +'</div>';
+      }).join('')
+      +'</div></div></div>';
   }
 
   // ── ULASAN & KOMENTAR lengkap ──
@@ -1418,6 +1547,7 @@ function renderPesananCard(p){
     +'<div class="pesanan-card-header"><div class="pesanan-avatar">'+ini+'</div>'
     +'<div style="flex:1"><div style="font-size:15px;font-weight:700">'+p.karyawan+'</div>'
     +'<div style="font-size:13px;color:var(--text2)">'+getEmoji(p.menu)+' '+p.menu+(p.qty>1?' ×'+p.qty:'')+'</div>'
+    +(p.lokasi?'<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;background:'+(p.lokasi==='Kantor A3'?'#EDE9FE':'#FFF3E0')+';color:'+(p.lokasi==='Kantor A3'?'#6D28D9':'#E65100')+';font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px">📍 '+p.lokasi+'</div>':'')
     +(p.catatan?'<div style="font-size:11px;color:var(--text3);margin-top:3px">📝 '+p.catatan+'</div>':'')
     +'</div><span class="badge '+p.status.toLowerCase()+'">'+p.status+'</span></div>'
     +'<div class="pesanan-card-footer"><div style="font-size:15px;font-weight:800">'+rp(p.harga)+'</div>'
@@ -1429,6 +1559,29 @@ function renderPesananCard(p){
     +'</div>';
 }
 function updateStatus(id,s){db.ref('pesanan/'+id+'/status').set(s).then(function(){showToast('Status: '+s);});}
+
+function toggleRatingDetail(){
+  var detail=document.getElementById('rating-detail');
+  var btn=document.getElementById('rating-toggle-btn');
+  if(!detail||!btn)return;
+  var open=detail.style.display!=='none';
+  detail.style.display=open?'none':'block';
+  btn.textContent=open?'Lihat ▾':'Tutup ▴';
+}
+function filterRatingMin(minVal,maxVal,el){
+  // Update chip aktif
+  if(el){
+    el.closest('.card').querySelectorAll('.chip').forEach(function(c){c.classList.remove('active');});
+    el.classList.add('active');
+  }
+  // Filter item
+  var items=document.querySelectorAll('.rating-item');
+  items.forEach(function(item){
+    var avg=parseFloat(item.getAttribute('data-avg'))||0;
+    var show=minVal===0||(avg>=minVal&&avg<=maxVal);
+    item.style.display=show?'':'none';
+  });
+}
 
 // ─────────────────────────────────────────────────────────
 //  ADMIN
@@ -1677,10 +1830,23 @@ function renderAdminTab(tab){
       +'<button onclick="downloadTagihanPDF()" style="flex:1;background:var(--blue-light);color:var(--blue);border:1.5px solid var(--blue);font-size:12px;font-weight:700;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit">🖨️ Cetak PDF</button>'
       +'</div>';
 
-    document.getElementById('at-tagihan').innerHTML=
-      '<div class="section-label">💳 Tagihan Over Budget</div>'
+    var tagihanEl=document.getElementById('at-tagihan');
+    tagihanEl.innerHTML=
+      // Konfirmasi pembayaran (async)
+      '<div id="konfirmasi-bayar-wrap"></div>'
+      // Pengaturan pembayaran shortcut
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      +'<div class="section-label" style="margin-bottom:0">💳 Tagihan Over Budget</div>'
+      +'<button onclick="openPaymentSettings()" style="background:var(--orange-light);border:1.5px solid var(--orange);color:var(--orange);font-size:11px;font-weight:700;padding:6px 12px;border-radius:8px;cursor:pointer;font-family:inherit;flex-shrink:0">⚙️ Atur Rekening/QRIS</button>'
+      +'</div>'
       +downloadBtns
       +listHtml;
+
+    // Load konfirmasi pembayaran async — hanya tampil jika ada data
+    renderKonfirmasiBayar().then(function(html){
+      var wrap=document.getElementById('konfirmasi-bayar-wrap');
+      if(wrap)wrap.innerHTML=html; // kosong jika tidak ada konfirmasi
+    });
   }
 
   if(tab==='jadwal'){
@@ -1754,6 +1920,11 @@ function renderAdminTab(tab){
       +'</div>'
       +'<div id="import-akun-preview" style="display:none;background:var(--bg);border-radius:var(--radius-sm);padding:10px;margin-bottom:10px;max-height:200px;overflow-y:auto;font-size:12px"></div>'
       +'<button class="btn success" onclick="importKaryawanExcel()">📥 Import Sekarang</button>'
+      +'</div>'
+      +'<div class="section-label">💳 Pengaturan Pembayaran</div>'
+      +'<div class="card" style="display:flex;align-items:center;justify-content:space-between">'
+      +'<div><div style="font-size:14px;font-weight:700">QRIS & Transfer Bank</div><div style="font-size:12px;color:var(--text3);margin-top:2px">Atur info pembayaran untuk karyawan</div></div>'
+      +'<button class="btn primary sm" onclick="openPaymentSettings()">⚙️ Atur</button>'
       +'</div>'
       +'<div class="alert warning">⚠️ PIN admin: <strong>0000</strong> · PIN warmindo: <strong>9999</strong> · Jangan gunakan untuk karyawan.</div>';
   }
@@ -2763,8 +2934,209 @@ function _refreshChatBadgesKaryawan(){
 }
 
 // ─────────────────────────────────────────────────────────
-//  INIT
+//  PEMBAYARAN — QRIS & TRANSFER BANK
 // ─────────────────────────────────────────────────────────
+var _bayarKid=null;
+
+function _renderPaymentInfo(ps){
+  // Merge dengan hardcoded sebagai fallback
+  var data={
+    qrisUrl:(ps&&ps.qrisUrl)||HARDCODED_PAYMENT.qrisUrl||'',
+    bankNama:(ps&&ps.bankNama)||HARDCODED_PAYMENT.bankNama||'',
+    bankNorek:(ps&&ps.bankNorek)||HARDCODED_PAYMENT.bankNorek||'',
+    bankAtasNama:(ps&&ps.bankAtasNama)||HARDCODED_PAYMENT.bankAtasNama||''
+  };
+  // Render QRIS
+  var qrisWrap=document.getElementById('qris-img-wrap');
+  if(qrisWrap){
+    if(data.qrisUrl){
+      qrisWrap.innerHTML='<img src="'+data.qrisUrl+'" style="max-width:220px;max-height:220px;border-radius:8px;display:block;margin:0 auto" onerror="this.parentNode.innerHTML=\'<div style=\\\"font-size:13px;color:var(--red)\\\">Gagal muat gambar QRIS</div>\'">'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:8px">Scan untuk bayar</div>';
+    } else {
+      qrisWrap.innerHTML='<div style="font-size:32px;margin-bottom:8px">📱</div><div style="font-size:13px;color:var(--text3);font-weight:600">QR Code belum diatur admin</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Minta admin upload gambar QRIS di menu Akun → Pengaturan Pembayaran</div>';
+    }
+  }
+  // Render Transfer Bank
+  var tfWrap=document.getElementById('tf-info-wrap');
+  if(tfWrap){
+    if(data.bankNorek){
+      tfWrap.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">'
+        +'<div style="font-size:28px">🏦</div>'
+        +'<div><div style="font-size:16px;font-weight:800;color:var(--text)">'+(data.bankNama||'Bank')+'</div>'
+        +'<div style="font-size:11px;color:var(--text3);font-weight:600">'+(data.bankAtasNama||'')+'</div></div></div>'
+        +'<div style="background:var(--orange-light);border-radius:10px;padding:14px;text-align:center">'
+        +'<div style="font-size:11px;color:var(--text3);font-weight:700;margin-bottom:6px;letter-spacing:.06em">NOMOR REKENING</div>'
+        +'<div style="font-size:24px;font-weight:800;color:var(--orange);letter-spacing:3px">'+data.bankNorek+'</div>'
+        +'<div style="font-size:12px;color:var(--text2);font-weight:600;margin-top:4px">a.n. '+(data.bankAtasNama||data.bankNama||'-')+'</div>'
+        +'<button onclick="navigator.clipboard.writeText(\''+data.bankNorek+'\').then(function(){showToast(\'✅ Nomor disalin\',\'ok\');})" '
+        +'style="margin-top:10px;background:var(--orange);color:#fff;border:none;font-size:12px;font-weight:700;padding:8px 20px;border-radius:99px;cursor:pointer;font-family:inherit">📋 Salin Nomor Rekening</button>'
+        +'</div>';
+    } else {
+      tfWrap.innerHTML='<div style="text-align:center;padding:8px"><div style="font-size:32px;margin-bottom:8px">🏦</div><div style="font-size:13px;color:var(--text3);font-weight:600">Info rekening belum diatur admin</div></div>';
+    }
+  }
+}
+
+function openBayarModal(tab){
+  _bayarKid=currentUser.id;
+  var jumlah=hitungTotalOverKid(_bayarKid);
+  document.getElementById('bayar-nama-label').textContent=currentUser.nama;
+  document.getElementById('bayar-jumlah-label').textContent=rp(jumlah);
+  document.getElementById('bayar-nominal').value=jumlah;
+  document.getElementById('bayar-catatan').value='';
+  switchBayarTab(tab||'qris');
+  document.getElementById('modal-bayar').classList.add('show');
+  // Render setelah modal tampil (DOM sudah siap)
+  setTimeout(function(){
+    _renderPaymentInfo(null);
+    if(db){
+      db.ref('paymentSettings').once('value').then(function(s){
+        _renderPaymentInfo(s.exists()?s.val():null);
+      }).catch(function(){});
+    }
+  },50);
+}
+
+function switchBayarTab(tab){
+  document.getElementById('panel-qris').style.display=tab==='qris'?'block':'none';
+  document.getElementById('panel-tf').style.display=tab==='tf'?'block':'none';
+  var activeStyle='flex:1;padding:10px;border-radius:10px;background:var(--orange);color:#fff;font-size:13px;font-weight:700;text-align:center;cursor:pointer';
+  var inactiveStyle='flex:1;padding:10px;border-radius:10px;background:var(--bg);color:var(--text3);border:1.5px solid var(--border);font-size:13px;font-weight:700;text-align:center;cursor:pointer';
+  document.getElementById('tab-qris').style.cssText=tab==='qris'?activeStyle:inactiveStyle;
+  document.getElementById('tab-tf').style.cssText=tab==='tf'?activeStyle:inactiveStyle;
+}
+
+function kirimBuktiPembayaran(){
+  var nominal=parseInt(document.getElementById('bayar-nominal').value)||0;
+  var catatan=document.getElementById('bayar-catatan').value.trim();
+  var jumlah=hitungTotalOverKid(_bayarKid);
+  if(nominal<=0){showToast('Isi nominal yang dibayar');return;}
+  if(nominal>jumlah*1.1){showToast('Nominal melebihi tagihan');return;}
+
+  // Simpan konfirmasi pembayaran ke Firebase
+  var konfId='konf'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+  var metode=document.getElementById('panel-qris').style.display!=='none'?'QRIS':'Transfer Bank';
+  var data={
+    id:konfId,
+    kid:_bayarKid,
+    namaKaryawan:currentUser.nama,
+    jumlahTagihan:jumlah,
+    nominalBayar:nominal,
+    metode:metode,
+    catatan:catatan,
+    waktu:nowTime(),
+    tanggal:today(),
+    status:'Menunggu Konfirmasi',
+    ts:Date.now()
+  };
+  db.ref('konfirmasiBayar/'+konfId).set(data).then(function(){
+    showToast('✅ Konfirmasi terkirim ke admin!','ok');
+    closeModal('modal-bayar');
+    // Notifikasi ke admin via Firebase flag
+    db.ref('notifAdmin/bayar_'+konfId).set({kid:_bayarKid,nama:currentUser.nama,nominal:nominal,metode:metode,ts:Date.now()});
+  }).catch(function(e){showToast('Gagal kirim: '+e.message);});
+}
+
+// ─── ADMIN: pengaturan & konfirmasi ───
+function openPaymentSettings(){
+  // Tampilkan data hardcoded dulu sebagai default
+  document.getElementById('ps-qris-url').value=HARDCODED_PAYMENT.qrisUrl||'';
+  document.getElementById('ps-bank-nama').value=HARDCODED_PAYMENT.bankNama||'';
+  document.getElementById('ps-bank-norek').value=HARDCODED_PAYMENT.bankNorek||'';
+  document.getElementById('ps-bank-atasnama').value=HARDCODED_PAYMENT.bankAtasNama||'';
+  document.getElementById('modal-payment-settings').classList.add('show');
+  // Timpa dengan data Firebase jika ada
+  if(db){
+    db.ref('paymentSettings').once('value').then(function(s){
+      if(!s.exists())return;
+      var ps=s.val();
+      if(ps.qrisUrl!==undefined)document.getElementById('ps-qris-url').value=ps.qrisUrl;
+      if(ps.bankNama)document.getElementById('ps-bank-nama').value=ps.bankNama;
+      if(ps.bankNorek)document.getElementById('ps-bank-norek').value=ps.bankNorek;
+      if(ps.bankAtasNama)document.getElementById('ps-bank-atasnama').value=ps.bankAtasNama;
+    });
+  }
+}
+function simpanPaymentSettings(){
+  var ps={
+    qrisUrl:document.getElementById('ps-qris-url').value.trim(),
+    bankNama:document.getElementById('ps-bank-nama').value.trim(),
+    bankNorek:document.getElementById('ps-bank-norek').value.trim(),
+    bankAtasNama:document.getElementById('ps-bank-atasnama').value.trim()
+  };
+  // Update in-memory hardcoded juga supaya langsung berlaku tanpa reload
+  HARDCODED_PAYMENT.qrisUrl=ps.qrisUrl;
+  HARDCODED_PAYMENT.bankNama=ps.bankNama;
+  HARDCODED_PAYMENT.bankNorek=ps.bankNorek;
+  HARDCODED_PAYMENT.bankAtasNama=ps.bankAtasNama;
+
+  if(db){
+    db.ref('paymentSettings').set(ps).then(function(){
+      showToast('✅ Pengaturan pembayaran disimpan','ok');
+      closeModal('modal-payment-settings');
+    });
+  } else {
+    showToast('✅ Tersimpan (offline mode)','ok');
+    closeModal('modal-payment-settings');
+  }
+}
+
+function renderKonfirmasiBayar(){
+  return new Promise(function(resolve){
+    if(!db){resolve('');return;}
+    db.ref('konfirmasiBayar').orderByChild('status').equalTo('Menunggu Konfirmasi').once('value').then(function(s){
+      if(!s.exists()||!s.val()){resolve('');return;}
+      var list=Object.values(s.val()).filter(function(k){return k&&k.id;}).sort(function(a,b){return(b.ts||0)-(a.ts||0);});
+      if(list.length===0){resolve('');return;}
+      var html='<div class="section-label">🔔 Konfirmasi Pembayaran ('+list.length+')</div>';
+      html+=list.map(function(k){
+        return'<div style="background:#fff;border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:var(--shadow);border-left:4px solid var(--orange)">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
+          +'<div><div style="font-size:14px;font-weight:800">'+( k.namaKaryawan||'-')+'</div>'
+          +'<div style="font-size:11px;color:var(--text3);margin-top:2px">'+(k.tanggal||'')+' · '+(k.waktu||'')+' · '+(k.metode||'')+'</div></div>'
+          +'<div style="text-align:right"><div style="font-size:15px;font-weight:800;color:var(--green)">'+rp(k.nominalBayar||0)+'</div>'
+          +'<div style="font-size:11px;color:var(--text3)">dari '+rp(k.jumlahTagihan||0)+'</div></div></div>'
+          +(k.catatan?'<div style="font-size:12px;color:var(--text2);background:var(--bg);padding:7px 10px;border-radius:8px;margin-bottom:10px">📝 '+k.catatan+'</div>':'')
+          +'<div style="display:flex;gap:8px">'
+          +'<button onclick="konfirmasiLunasAdmin(\''+k.id+'\',\''+k.kid+'\','+( k.nominalBayar||0)+')" style="flex:1;background:var(--green);color:#fff;border:none;font-size:12px;font-weight:700;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit">✅ Konfirmasi Lunas</button>'
+          +'<button onclick="tolakKonfirmasi(\''+k.id+'\')" style="flex:1;background:var(--red-light);color:var(--red);border:1.5px solid #fcc;font-size:12px;font-weight:700;padding:9px;border-radius:8px;cursor:pointer;font-family:inherit">❌ Tolak</button>'
+          +'</div></div>';
+      }).join('');
+      resolve(html);
+    }).catch(function(e){
+      console.warn('[konfirmasi]',e);
+      resolve('');
+    });
+  });
+}
+
+function konfirmasiLunasAdmin(konfId,kid,nominalBayar){
+  if(!confirm('Konfirmasi pembayaran ini dan tandai lunas?'))return;
+  // Tandai konfirmasi selesai
+  db.ref('konfirmasiBayar/'+konfId+'/status').set('Dikonfirmasi').then(function(){
+    // Eksekusi lunas seperti biasa
+    eksekusiLunas(kid);
+    showToast('✅ Pembayaran dikonfirmasi & tagihan dilunasi','ok');
+    renderAdminTab('tagihan');
+  });
+}
+
+function tolakKonfirmasi(konfId){
+  if(!confirm('Tolak konfirmasi pembayaran ini?'))return;
+  db.ref('konfirmasiBayar/'+konfId+'/status').set('Ditolak').then(function(){
+    showToast('Konfirmasi ditolak','warn');
+    renderAdminTab('tagihan');
+  });
+}
+// ─────────────────────────────────────────────────────────
+//  HARDCODED PAYMENT & INIT
+// ─────────────────────────────────────────────────────────
+var HARDCODED_PAYMENT={
+  qrisUrl:'',
+  bankNama:'BRI',
+  bankNorek:'0462582011',
+  bankAtasNama:'Warmindo'
+};
 (function init(){
   var HARDCODED_CFG={
     apiKey:'AIzaSyAvQvzdNognxYTz_eU6dTJUa5WSy-_zAkk',
@@ -2776,6 +3148,15 @@ function _refreshChatBadgesKaryawan(){
   localStorage.setItem('fb_config',JSON.stringify(HARDCODED_CFG));
   Object.keys(HARDCODED_CFG).forEach(function(k){var el=document.getElementById('cfg-'+k);if(el)el.value=HARDCODED_CFG[k];});
   connectFirebase(HARDCODED_CFG);
+  // Seed payment settings ke Firebase jika belum ada
+  setTimeout(function(){
+    if(!db)return;
+    db.ref('paymentSettings').once('value').then(function(s){
+      if(!s.exists()||!s.val().bankNorek){
+        db.ref('paymentSettings').set(HARDCODED_PAYMENT);
+      }
+    });
+  },3000);
   if('Notification'in window&&Notification.permission==='granted')notifPermission=true;
 })();
 </script>

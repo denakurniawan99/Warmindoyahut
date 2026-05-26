@@ -638,7 +638,45 @@ function setupInitialData(){
       b['jamPesan']={buka:'07:00',tutup:'10:00',aktif:1};
       return db.ref().update(b);
     }
-  }).then(function(){startListeners();showScreen('s-login');document.getElementById('a-date-header').innerHTML='<span class="rt-dot" style="background:#fff"></span>'+fmtDate(today());});
+  }).then(function(){
+    startListeners();
+    document.getElementById('a-date-header').innerHTML='<span class="rt-dot" style="background:#fff"></span>'+fmtDate(today());
+    // Restore session — tunggu data karyawan Firebase benar-benar masuk (bukan timeout buta)
+    try{
+      var _sess=JSON.parse(localStorage.getItem('myk_session')||'null');
+      // Session valid max 12 jam
+      if(_sess&&_sess.role&&_sess.user&&(Date.now()-(_sess.ts||0))<12*60*60*1000){
+        if(_sess.role==='karyawan'){
+          // Baca langsung dari Firebase — pasti dapat data terbaru, tidak bergantung cache timing
+          db.ref('karyawan/'+_sess.user.id).once('value').then(function(snap){
+            if(snap.exists()){
+              var _k=snap.val();
+              currentRole='karyawan';currentUser=_k;
+              showScreen('s-karyawan');window.scrollTo(0,0);
+              updateNotifBtn();updateSuaraBtn();
+              keranjang={};showPesananExpanded=true;renderKaryawan();
+            } else {
+              // Akun memang sudah dihapus admin — hapus session, minta login ulang
+              localStorage.removeItem('myk_session');
+              showScreen('s-login');
+            }
+          }).catch(function(){showScreen('s-login');});
+        } else if(_sess.role==='warmindo'){
+          currentRole='warmindo';currentUser=_sess.user;
+          showScreen('s-warmindo');window.scrollTo(0,0);
+          updateNotifBtn();updateSuaraBtn();renderWarmindo();setTimeout(cekPesananTerlewat,2000);
+        } else if(_sess.role==='admin'){
+          currentRole='admin';currentUser=_sess.user;
+          showScreen('s-admin');window.scrollTo(0,0);
+          updateNotifBtn();updateSuaraBtn();activeAdminTab='rekap';renderAdminAll();
+        } else {
+          showScreen('s-login');
+        }
+        return;
+      }
+    }catch(e){}
+    showScreen('s-login');
+  });
 }
 
 // ─────────────────────────────────────────────────────────
@@ -1006,17 +1044,22 @@ function doLogin(){
 function showLoginErr(){document.getElementById('login-err').style.display='block';clearPin();}
 function loginAs(role,user){
   currentRole=role;currentUser=user;
+  // Simpan session agar tidak perlu login ulang saat refresh
+  try{localStorage.setItem('myk_session',JSON.stringify({role:role,user:user,ts:Date.now()}));}catch(e){}
   showScreen('s-'+role);window.scrollTo(0,0);
   updateNotifBtn();updateSuaraBtn();
   if(role==='karyawan'){keranjang={};showPesananExpanded=true;renderKaryawan();}
   if(role==='warmindo'){
     renderWarmindo();
-    // Cek pesanan terlewat setelah data Firebase siap (delay 2 detik)
     setTimeout(cekPesananTerlewat,2000);
   }
   if(role==='admin'){activeAdminTab='rekap';renderAdminAll();}
 }
-function doLogout(){currentRole=null;currentUser=null;keranjang={};clearPin();document.getElementById('login-role').value='karyawan';onRoleChange();showScreen('s-login');window.scrollTo(0,0);}
+function doLogout(){
+  currentRole=null;currentUser=null;keranjang={};
+  try{localStorage.removeItem('myk_session');}catch(e){}
+  clearPin();document.getElementById('login-role').value='karyawan';onRoleChange();showScreen('s-login');window.scrollTo(0,0);
+}
 
 // ─────────────────────────────────────────────────────────
 //  JAM PESAN

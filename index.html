@@ -415,8 +415,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
     </div>
     <!-- Panel QRIS -->
     <div id="panel-qris">
-      <div id="qris-display" style="text-align:center;margin-bottom:12px">
-        <div style="background:var(--bg);border-radius:12px;padding:16px;border:2px dashed var(--border)" id="qris-img-wrap">
+      <div id="qris-display" style="text-align:center;margin-bottom:12px;overflow:hidden">
+        <div style="background:var(--bg);border-radius:12px;padding:8px;border:2px dashed var(--border);text-align:center;overflow:hidden;box-sizing:border-box" id="qris-img-wrap">
           <div style="font-size:13px;color:var(--text3)">QR Code belum diatur admin</div>
         </div>
       </div>
@@ -455,11 +455,21 @@ input:focus,select:focus,textarea:focus{border-color:var(--orange);box-shadow:0 
     <div class="modal-handle"></div>
     <div style="font-size:17px;font-weight:800;margin-bottom:16px">💳 Pengaturan Pembayaran</div>
     <div class="section-label">📱 QRIS</div>
-    <div class="fg">
-      <label>URL Gambar QRIS</label>
-      <input type="text" id="ps-qris-url" placeholder="https://... (link gambar QR dari bank/dompet)">
+    <!-- Preview QRIS -->
+    <div id="ps-qris-preview" style="display:none;text-align:center;margin-bottom:12px">
+      <img id="ps-qris-img" src="" style="width:100%;max-width:200px;height:auto;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.12)" alt="Preview QRIS">
+      <div style="margin-top:8px;display:flex;gap:8px;justify-content:center">
+        <span style="font-size:11px;color:var(--green);font-weight:700">✅ Gambar QRIS tersimpan</span>
+        <button onclick="hapusQrisGambar()" style="font-size:11px;color:var(--red);font-weight:700;background:none;border:none;cursor:pointer;font-family:inherit;padding:0">✕ Hapus</button>
+      </div>
     </div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6">Upload gambar QRIS statis ke Google Drive / ImgBB / link lainnya, lalu tempel URL-nya di sini.</div>
+    <div id="ps-qris-upload-area" style="border:2px dashed var(--orange);border-radius:12px;padding:20px;text-align:center;cursor:pointer;margin-bottom:12px;background:var(--orange-light)" onclick="document.getElementById('ps-qris-file').click()">
+      <div style="font-size:32px;margin-bottom:6px">📷</div>
+      <div style="font-size:13px;font-weight:700;color:var(--orange)">Tap untuk upload foto QRIS</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px">dari Galeri / Kamera HP</div>
+      <input type="file" id="ps-qris-file" accept="image/*" style="display:none" onchange="piliGambarQris(this)">
+    </div>
+    <input type="hidden" id="ps-qris-url">
     <div class="section-label">🏦 Transfer Bank</div>
     <div class="fg"><label>Nama Bank</label><input type="text" id="ps-bank-nama" placeholder="mis: BCA, BRI, Mandiri, BNI"></div>
     <div class="fg"><label>Nomor Rekening</label><input type="number" id="ps-bank-norek" placeholder="mis: 1234567890" inputmode="numeric"></div>
@@ -749,6 +759,17 @@ function _speakWarmindo(teks){
 function playSound(type){
   if(!_suaraAktif)return;
 
+  // ── VISIBILITY CHANGE: cek pesanan terlewat saat tab kembali aktif ──
+  // (didaftarkan sekali di sini agar akses ke fungsi lain sudah tersedia)
+  if(!window._visListenerAdded){
+    window._visListenerAdded=true;
+    document.addEventListener('visibilitychange',function(){
+      if(document.visibilityState==='visible'&&currentRole==='warmindo'){
+        setTimeout(cekPesananTerlewat,800);
+      }
+    });
+  }
+
   // ── PESANAN BARU: khusus warmindo pakai chime + TTS ──
   if(type==='pesanan_baru' && currentRole==='warmindo'){
     // 1) Chime singkat dulu (ding-ding)
@@ -983,7 +1004,18 @@ function doLogin(){
   else{var kid=document.getElementById('login-nama').value;var k=cache.karyawan.find(function(x){return x.id===kid;});if(k&&pinInput===k.pin)loginAs('karyawan',k);else showLoginErr();}
 }
 function showLoginErr(){document.getElementById('login-err').style.display='block';clearPin();}
-function loginAs(role,user){currentRole=role;currentUser=user;showScreen('s-'+role);window.scrollTo(0,0);updateNotifBtn();updateSuaraBtn();if(role==='karyawan'){keranjang={};showPesananExpanded=true;renderKaryawan();}if(role==='warmindo')renderWarmindo();if(role==='admin'){activeAdminTab='rekap';renderAdminAll();}}
+function loginAs(role,user){
+  currentRole=role;currentUser=user;
+  showScreen('s-'+role);window.scrollTo(0,0);
+  updateNotifBtn();updateSuaraBtn();
+  if(role==='karyawan'){keranjang={};showPesananExpanded=true;renderKaryawan();}
+  if(role==='warmindo'){
+    renderWarmindo();
+    // Cek pesanan terlewat setelah data Firebase siap (delay 2 detik)
+    setTimeout(cekPesananTerlewat,2000);
+  }
+  if(role==='admin'){activeAdminTab='rekap';renderAdminAll();}
+}
 function doLogout(){currentRole=null;currentUser=null;keranjang={};clearPin();document.getElementById('login-role').value='karyawan';onRoleChange();showScreen('s-login');window.scrollTo(0,0);}
 
 // ─────────────────────────────────────────────────────────
@@ -1031,7 +1063,7 @@ function renderKaryawan(){
       var chatBtn='<button class="'+chatBtnClass+'" data-chat-pid="'+p.id+'" onclick="toggleChatKaryawan(\''+p.id+'\')">💬 '+(unread>0?'Pesan ('+unread+')':'Chat')+'</button>';
       itemsHtml+='<div class="success-item">'
         +'<div style="flex:1"><div style="font-size:14px;font-weight:700;color:#fff">'+p.menu+(p.qty>1?' ×'+p.qty:'')+'</div>'
-        +(p.lokasi?'<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:rgba(255,255,255,.2);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">📍 '+p.lokasi+'</div>':'')
+        +(( p.lokasi||'Kantor Beji')?'<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:rgba(255,255,255,.2);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px">📍 '+(p.lokasi||'Kantor Beji')+'</div>':'')
         +(p.catatan?'<div style="font-size:11px;color:rgba(255,255,255,.6);margin-top:2px">📝 '+p.catatan+'</div>':'')
         +'<div style="margin-top:5px;display:flex;align-items:center;flex-wrap:wrap;gap:4px"><span class="badge '+p.status.toLowerCase()+'">'+p.status+'</span>'+batalBtn+ratingBtn+chatBtn+'</div>'
         +'<div id="k-chat-box-'+p.id+'" style="display:none;margin-top:8px"></div>'
@@ -1554,7 +1586,7 @@ function renderPesananCard(p){
     +'<div class="pesanan-card-header"><div class="pesanan-avatar">'+ini+'</div>'
     +'<div style="flex:1"><div style="font-size:15px;font-weight:700">'+p.karyawan+'</div>'
     +'<div style="font-size:13px;color:var(--text2)">'+getEmoji(p.menu)+' '+p.menu+(p.qty>1?' ×'+p.qty:'')+'</div>'
-    +(p.lokasi?'<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;background:'+(p.lokasi==='Kantor A3'?'#EDE9FE':'#FFF3E0')+';color:'+(p.lokasi==='Kantor A3'?'#6D28D9':'#E65100')+';font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px">📍 '+p.lokasi+'</div>':'')
+    +(( p.lokasi||'Kantor Beji')?'<div style="display:inline-flex;align-items:center;gap:4px;margin-top:4px;background:'+((p.lokasi||'Kantor Beji')==='Kantor A3'?'#EDE9FE':'#FFF3E0')+';color:'+((p.lokasi||'Kantor Beji')==='Kantor A3'?'#6D28D9':'#E65100')+';font-size:11px;font-weight:700;padding:3px 8px;border-radius:99px">📍 '+(p.lokasi||'Kantor Beji')+'</div>':'')
     +(p.catatan?'<div style="font-size:11px;color:var(--text3);margin-top:3px">📝 '+p.catatan+'</div>':'')
     +'</div><span class="badge '+p.status.toLowerCase()+'">'+p.status+'</span></div>'
     +'<div class="pesanan-card-footer"><div style="font-size:15px;font-weight:800">'+rp(p.harga)+'</div>'
@@ -1566,6 +1598,26 @@ function renderPesananCard(p){
     +'</div>';
 }
 function updateStatus(id,s){db.ref('pesanan/'+id+'/status').set(s).then(function(){showToast('Status: '+s);});}
+
+// ─── CEK PESANAN TERLEWAT SAAT BUKA APLIKASI ───
+function cekPesananTerlewat(){
+  if(currentRole!=='warmindo'||!_suaraAktif)return;
+  var menunggu=cache.pesanan.filter(function(p){
+    return p.tanggal===today()&&p.status==='Menunggu';
+  });
+  if(menunggu.length===0)return;
+
+  // Tunda sedikit agar AudioContext sudah ter-unlock dari interaksi login
+  setTimeout(function(){
+    if(menunggu.length===1){
+      speakTTS('Ada '+menunggu.length+' pesanan menunggu diproses. Segera cek ya!');
+    } else {
+      speakTTS('Ada '+menunggu.length+' pesanan yang belum diproses. Yuk segera dikerjakan!');
+    }
+    playSound('pesanan_baru');
+    showToast('🔔 '+menunggu.length+' pesanan menunggu!','warn');
+  },1200);
+}
 
 function toggleRatingDetail(){
   var detail=document.getElementById('rating-detail');
@@ -2953,14 +3005,33 @@ function _renderPaymentInfo(ps){
     bankNorek:(ps&&ps.bankNorek)||HARDCODED_PAYMENT.bankNorek||'',
     bankAtasNama:(ps&&ps.bankAtasNama)||HARDCODED_PAYMENT.bankAtasNama||''
   };
-  // Render QRIS
+  // Render QRIS — pakai DOM API agar tidak ada string escaping bocor
   var qrisWrap=document.getElementById('qris-img-wrap');
   if(qrisWrap){
+    qrisWrap.innerHTML='';
     if(data.qrisUrl){
-      qrisWrap.innerHTML='<img src="'+data.qrisUrl+'" style="max-width:220px;max-height:220px;border-radius:8px;display:block;margin:0 auto" onerror="this.parentNode.innerHTML=\'<div style=\\\"font-size:13px;color:var(--red)\\\">Gagal muat gambar QRIS</div>\'">'
-        +'<div style="font-size:11px;color:var(--text3);margin-top:8px">Scan untuk bayar</div>';
+      qrisWrap.style.padding='8px';
+      var imgEl=document.createElement('img');
+      imgEl.src=data.qrisUrl;
+      imgEl.alt='QR Code QRIS';
+      imgEl.style.cssText='width:100%;height:auto;display:block;border-radius:8px';
+      var errDiv=document.createElement('div');
+      errDiv.style.cssText='padding:20px;text-align:center;font-size:12px;color:var(--text3);display:none';
+      errDiv.innerHTML='<div style="font-size:32px;margin-bottom:8px">⚠️</div><div style="font-weight:700;color:var(--red)">Gambar tidak bisa dimuat</div><div style="margin-top:4px">Minta admin upload ulang gambar QRIS</div>';
+      imgEl.onerror=function(){imgEl.style.display='none';errDiv.style.display='block';};
+      var caption=document.createElement('div');
+      caption.style.cssText='font-size:12px;font-weight:600;color:var(--text3);margin-top:10px;text-align:center;padding-bottom:4px';
+      caption.textContent='📱 Scan QR untuk bayar';
+      qrisWrap.appendChild(imgEl);
+      qrisWrap.appendChild(errDiv);
+      qrisWrap.appendChild(caption);
     } else {
-      qrisWrap.innerHTML='<div style="font-size:32px;margin-bottom:8px">📱</div><div style="font-size:13px;color:var(--text3);font-weight:600">QR Code belum diatur admin</div><div style="font-size:11px;color:var(--text3);margin-top:4px">Minta admin upload gambar QRIS di menu Akun → Pengaturan Pembayaran</div>';
+      qrisWrap.innerHTML='<div style="padding:20px 0;text-align:center">'
+        +'<div style="font-size:40px;margin-bottom:8px">📱</div>'
+        +'<div style="font-size:13px;font-weight:700;color:var(--text2)">QRIS belum diatur</div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.6">Admin bisa atur QRIS di<br><strong>Tab Tagihan → ⚙️ Atur Rekening/QRIS</strong></div>'
+        +'<div style="font-size:11px;color:var(--text3);margin-top:6px">Sementara gunakan Transfer Bank</div>'
+        +'</div>';
     }
   }
   // Render Transfer Bank
@@ -3046,43 +3117,80 @@ function kirimBuktiPembayaran(){
 
 // ─── ADMIN: pengaturan & konfirmasi ───
 function openPaymentSettings(){
-  // Tampilkan data hardcoded dulu sebagai default
-  document.getElementById('ps-qris-url').value=HARDCODED_PAYMENT.qrisUrl||'';
   document.getElementById('ps-bank-nama').value=HARDCODED_PAYMENT.bankNama||'';
   document.getElementById('ps-bank-norek').value=HARDCODED_PAYMENT.bankNorek||'';
   document.getElementById('ps-bank-atasnama').value=HARDCODED_PAYMENT.bankAtasNama||'';
+  _updateQrisPreview(HARDCODED_PAYMENT.qrisUrl||'');
   document.getElementById('modal-payment-settings').classList.add('show');
-  // Timpa dengan data Firebase jika ada
   if(db){
     db.ref('paymentSettings').once('value').then(function(s){
       if(!s.exists())return;
       var ps=s.val();
-      if(ps.qrisUrl!==undefined)document.getElementById('ps-qris-url').value=ps.qrisUrl;
+      if(ps.qrisUrl)_updateQrisPreview(ps.qrisUrl);
       if(ps.bankNama)document.getElementById('ps-bank-nama').value=ps.bankNama;
       if(ps.bankNorek)document.getElementById('ps-bank-norek').value=ps.bankNorek;
       if(ps.bankAtasNama)document.getElementById('ps-bank-atasnama').value=ps.bankAtasNama;
     });
   }
 }
+function _updateQrisPreview(url){
+  document.getElementById('ps-qris-url').value=url||'';
+  var preview=document.getElementById('ps-qris-preview');
+  var uploadArea=document.getElementById('ps-qris-upload-area');
+  var img=document.getElementById('ps-qris-img');
+  if(url){
+    img.src=url;
+    preview.style.display='block';
+    uploadArea.style.display='none';
+  } else {
+    preview.style.display='none';
+    uploadArea.style.display='block';
+  }
+}
+function piliGambarQris(input){
+  var file=input.files&&input.files[0];
+  if(!file)return;
+  if(file.size>3*1024*1024){showToast('Ukuran gambar max 3MB. Kompres dulu ya.');return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    _updateQrisPreview(e.target.result);
+    showToast('✅ Gambar dipilih, klik Simpan untuk menyimpan','ok');
+  };
+  reader.readAsDataURL(file);
+}
+function hapusQrisGambar(){
+  _updateQrisPreview('');
+  document.getElementById('ps-qris-file').value='';
+  showToast('Gambar QRIS dihapus');
+}
 function simpanPaymentSettings(){
+  var qrisUrl=document.getElementById('ps-qris-url').value||'';
   var ps={
-    qrisUrl:document.getElementById('ps-qris-url').value.trim(),
+    qrisUrl:qrisUrl,
     bankNama:document.getElementById('ps-bank-nama').value.trim(),
     bankNorek:document.getElementById('ps-bank-norek').value.trim(),
     bankAtasNama:document.getElementById('ps-bank-atasnama').value.trim()
   };
-  // Update in-memory hardcoded juga supaya langsung berlaku tanpa reload
-  HARDCODED_PAYMENT.qrisUrl=ps.qrisUrl;
+  HARDCODED_PAYMENT.qrisUrl=qrisUrl;
   HARDCODED_PAYMENT.bankNama=ps.bankNama;
   HARDCODED_PAYMENT.bankNorek=ps.bankNorek;
   HARDCODED_PAYMENT.bankAtasNama=ps.bankAtasNama;
 
+  var btnSimpan=document.querySelector('#modal-payment-settings .btn.primary');
+  if(btnSimpan){btnSimpan.disabled=true;btnSimpan.textContent='Menyimpan...';}
+
   if(db){
     db.ref('paymentSettings').set(ps).then(function(){
+      if(btnSimpan){btnSimpan.disabled=false;btnSimpan.textContent='💾 Simpan Pengaturan';}
       showToast('✅ Pengaturan pembayaran disimpan','ok');
       closeModal('modal-payment-settings');
+      if(activeAdminTab==='tagihan')renderAdminTab('tagihan');
+    }).catch(function(e){
+      if(btnSimpan){btnSimpan.disabled=false;btnSimpan.textContent='💾 Simpan Pengaturan';}
+      showToast('Gagal simpan: '+e.message);
     });
   } else {
+    if(btnSimpan){btnSimpan.disabled=false;btnSimpan.textContent='💾 Simpan Pengaturan';}
     showToast('✅ Tersimpan (offline mode)','ok');
     closeModal('modal-payment-settings');
   }
@@ -3139,7 +3247,7 @@ function tolakKonfirmasi(konfId){
 //  HARDCODED PAYMENT & INIT
 // ─────────────────────────────────────────────────────────
 var HARDCODED_PAYMENT={
-  qrisUrl:'',
+  qrisUrl:'https://i.ibb.co/NnfCBtgB/Qris.jpg',
   bankNama:'BRI',
   bankNorek:'0462582011',
   bankAtasNama:'Warmindo'

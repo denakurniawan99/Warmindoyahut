@@ -624,41 +624,46 @@ function connectFirebase(cfg){
   try{if(firebase.apps.length)firebase.apps.forEach(function(a){try{a.delete();}catch(e){}});}catch(e){}
   try{
     firebase.initializeApp(cfg);db=firebase.database();
-    db.ref('.info/connected').once('value').then(function(){setupInitialData();}).catch(function(err){
-      showScreen('s-setup');var el=document.getElementById('cfg-err');el.textContent='Gagal: '+err.message;el.style.display='block';
+    var _connected=false;
+    // Timeout safety — kalau 5 detik tidak connect, tetap lanjut
+    var _timeout=setTimeout(function(){
+      if(!_connected){_connected=true;console.warn('[Firebase] Timeout, lanjut offline');setupInitialData();}
+    },5000);
+    db.ref('.info/connected').on('value',function(snap){
+      if(!_connected){
+        _connected=true;
+        clearTimeout(_timeout);
+        setupInitialData();
+      }
     });
-  }catch(err){showScreen('s-setup');var el=document.getElementById('cfg-err');el.textContent='Error: '+err.message;el.style.display='block';}
+  }catch(err){showScreen('s-setup');var el=document.getElementById('cfg-err');if(el){el.textContent='Error: '+err.message;el.style.display='block';}}
 }
 function setupInitialData(){
-  db.ref('karyawan').once('value').then(function(snap){
-    if(!snap.exists()){
-      var b={};
-      DEFAULT_KARYAWAN.forEach(function(k){b['karyawan/'+k.id]=k;});
-      DEFAULT_MENU.forEach(function(m){b['menu/'+m.id]=m;});
-      b['jamPesan']={buka:'07:00',tutup:'10:00',aktif:1};
-      return db.ref().update(b);
-    }
-  }).then(function(){
+  var _go=function(){
     startListeners();
     document.getElementById('a-date-header').innerHTML='<span class="rt-dot" style="background:#fff"></span>'+fmtDate(today());
-    // Restore session — tunggu data karyawan Firebase benar-benar masuk (bukan timeout buta)
+    // Restore session
     try{
       var _sess=JSON.parse(localStorage.getItem('myk_session')||'null');
-      // Session valid max 12 jam
       if(_sess&&_sess.role&&_sess.user&&(Date.now()-(_sess.ts||0))<12*60*60*1000){
         if(_sess.role==='karyawan'){
-          // Baca langsung dari Firebase — pasti dapat data terbaru, tidak bergantung cache timing
           db.ref('karyawan/'+_sess.user.id).once('value').then(function(snap){
             if(snap.exists()){
               var _k=snap.val();
               currentRole='karyawan';currentUser=_k;
               showScreen('s-karyawan');window.scrollTo(0,0);
               updateNotifBtn();updateSuaraBtn();
-              keranjang={};showPesananExpanded=true;renderKaryawan();
+              keranjang={};showPesananExpanded=true;
+              var _renderDone=false;
+              var _tryCount=0;
+              var _tryTimer=setInterval(function(){
+                _tryCount++;
+                if(!_renderDone&&(cache.menu.length>0||_tryCount>=15)){
+                  _renderDone=true;clearInterval(_tryTimer);renderKaryawan();
+                }
+              },200);
             } else {
-              // Akun memang sudah dihapus admin — hapus session, minta login ulang
-              localStorage.removeItem('myk_session');
-              showScreen('s-login');
+              localStorage.removeItem('myk_session');showScreen('s-login');
             }
           }).catch(function(){showScreen('s-login');});
         } else if(_sess.role==='warmindo'){
@@ -676,7 +681,19 @@ function setupInitialData(){
       }
     }catch(e){}
     showScreen('s-login');
-  });
+  };
+  // Seed data awal jika Firebase kosong, lalu jalankan
+  try{
+    db.ref('karyawan').once('value').then(function(snap){
+      if(!snap.exists()){
+        var b={};
+        DEFAULT_KARYAWAN.forEach(function(k){b['karyawan/'+k.id]=k;});
+        DEFAULT_MENU.forEach(function(m){b['menu/'+m.id]=m;});
+        b['jamPesan']={buka:'07:00',tutup:'10:00',aktif:1};
+        return db.ref().update(b);
+      }
+    }).then(_go).catch(function(){_go();});
+  }catch(e){_go();}
 }
 
 // ─────────────────────────────────────────────────────────
@@ -684,25 +701,95 @@ function setupInitialData(){
 // ─────────────────────────────────────────────────────────
 function startListeners(){
   clearListeners();
+
+  // ── DEBOUNCE RENDER ──────────────────────────────────────
+  var _renderTimer=null;
+  var _ready={karyawan:false,menu:false,pesanan:false,jamPesan:false};
+  var _firstRenderDone=false;
+
+  function _scheduleRender(){
+    if(_renderTimer)clearTimeout(_renderTimer);
+    _renderTimer=setTimeout(function(){
+      _renderTimer=null;
+      if(currentRole==='karyawan')renderKaryawan();
+      else if(currentRole==='warmindo')renderWarmindo();
+      else if(currentRole==='admin')renderAdminAll();
+    },80);
+  }
+
+  function _markReady(key){
+    if(key)_ready[key]=true;
+    // Render pertama kali hanya setelah 4 data kritis siap
+    var critical=_ready.karyawan&&_ready.menu&&_ready.pesanan&&_ready.jamPesan;
+    if(critical&&!_firstRenderDone){
+      _firstRenderDone=true;
+      _scheduleRender();
+      if(currentRole==='warmindo')setTimeout(cekPesananTerlewat,2000);
+    }
+    // Safety fallback: render paksa setelah 4 detik meski belum semua ready
+    if(key==='karyawan'&&!_firstRenderDone){
+      setTimeout(function(){
+        if(!_firstRenderDone){_firstRenderDone=true;_scheduleRender();}
+      },4000);
+    }
+  }
+  // ─────────────────────────────────────────────────────────
+
   var refs={karyawan:db.ref('karyawan'),menu:db.ref('menu'),pesanan:db.ref('pesanan'),tagihan:db.ref('tagihan'),jadwal:db.ref('jadwal'),jamPesan:db.ref('jamPesan'),rating:db.ref('rating'),lunasBayar:db.ref('lunasBayar'),lunasHistory:db.ref('lunasHistory'),chatPesan:db.ref('chatPesan')};
   var prevCount=cache.pesanan.length;
-  var h1=refs.karyawan.on('value',function(s){cache.karyawan=s.exists()?Object.values(s.val()):[];renderLoginNama();if(currentRole==='admin'&&activeAdminTab==='akun')renderAdminTab('akun');});
-  var h2=refs.menu.on('value',function(s){cache.menu=s.exists()?Object.values(s.val()):[];if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');if(currentRole==='karyawan')renderKaryawan();});
+  var h1=refs.karyawan.on('value',function(s){
+    cache.karyawan=s.exists()?Object.values(s.val()):[];
+    renderLoginNama();
+    if(currentRole==='admin'&&activeAdminTab==='akun')renderAdminTab('akun');
+    _markReady('karyawan');
+    if(_firstRenderDone&&currentRole==='karyawan')_scheduleRender();
+  });
+  var h2=refs.menu.on('value',function(s){
+    cache.menu=s.exists()?Object.values(s.val()):[];
+    if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');
+    _markReady('menu');
+    if(_firstRenderDone&&currentRole==='karyawan')_scheduleRender();
+  });
   var h3=refs.pesanan.on('value',function(s){
     var newP=s.exists()?Object.values(s.val()):[];
-    if(currentRole==='warmindo'&&newP.length>prevCount){var n=newP.filter(function(p){return p.tanggal===today()&&p.status==='Menunggu';});if(n.length>0){sendBrowserNotif('🍱 Pesanan Baru!',n[n.length-1].karyawan+' memesan '+n[n.length-1].menu);if(_suaraAktif)playSound('pesanan_baru');}}
-    if(currentRole==='karyawan'&&currentUser){newP.forEach(function(np){var old=cache.pesanan.find(function(p){return p.id===np.id;});if(old&&old.status!==np.status&&np.kid===currentUser.id){sendBrowserNotif('🍽️ Status Pesanan',np.menu+' → '+np.status);if(_suaraAktif)playSound('status_update');}});}
+    if(_firstRenderDone){
+      if(currentRole==='warmindo'&&newP.length>prevCount){var n=newP.filter(function(p){return p.tanggal===today()&&p.status==='Menunggu';});if(n.length>0){sendBrowserNotif('🍱 Pesanan Baru!',n[n.length-1].karyawan+' memesan '+n[n.length-1].menu);if(_suaraAktif)playSound('pesanan_baru');}}
+      if(currentRole==='karyawan'&&currentUser){newP.forEach(function(np){var old=cache.pesanan.find(function(p){return p.id===np.id;});if(old&&old.status!==np.status&&np.kid===currentUser.id){sendBrowserNotif('🍽️ Status Pesanan',np.menu+' → '+np.status);if(_suaraAktif)playSound('status_update');}});}
+    }
     prevCount=newP.length;cache.pesanan=newP;
-    if(currentRole==='warmindo')renderWarmindo();
-    if(currentRole==='admin')renderAdminTab(activeAdminTab);
-    if(currentRole==='karyawan')renderKaryawan();
+    _markReady('pesanan');
+    if(_firstRenderDone)_scheduleRender();
   });
-  var h4=refs.tagihan.on('value',function(s){cache.tagihan=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');if(currentRole==='karyawan')renderKaryawan();});
-  var h5=refs.jadwal.on('value',function(s){cache.jadwal=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='jadwal')renderAdminTab('jadwal');if(currentRole==='karyawan')renderKaryawan();});
-  var h6=refs.jamPesan.on('value',function(s){cache.jamPesan=s.exists()?s.val():{buka:'07:00',tutup:'10:00',aktif:1};if(currentRole==='karyawan')renderKaryawan();if(currentRole==='warmindo')renderWarmindo();});
-  var h7=refs.rating.on('value',function(s){cache.rating=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');if(currentRole==='warmindo')renderWarmindo();});
-  var h8=refs.lunasHistory.on('value',function(s){cache.lunasHistory=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');if(currentRole==='karyawan')renderKaryawan();});
-  var h9=refs.lunasBayar.on('value',function(s){cache.lunasBayar=s.exists()?(s.val()||{}):{};if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');if(currentRole==='karyawan')renderKaryawan();});
+  var h4=refs.tagihan.on('value',function(s){
+    cache.tagihan=s.exists()?(s.val()||{}):{};
+    if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');
+    if(_firstRenderDone&&currentRole==='karyawan')_scheduleRender();
+  });
+  var h5=refs.jadwal.on('value',function(s){
+    cache.jadwal=s.exists()?(s.val()||{}):{};
+    if(currentRole==='admin'&&activeAdminTab==='jadwal')renderAdminTab('jadwal');
+    if(_firstRenderDone&&currentRole==='karyawan')_scheduleRender();
+  });
+  var h6=refs.jamPesan.on('value',function(s){
+    cache.jamPesan=s.exists()?s.val():{buka:'07:00',tutup:'10:00',aktif:1};
+    _markReady('jamPesan');
+    if(_firstRenderDone)_scheduleRender();
+  });
+  var h7=refs.rating.on('value',function(s){
+    cache.rating=s.exists()?(s.val()||{}):{};
+    if(currentRole==='admin'&&activeAdminTab==='menu')renderAdminTab('menu');
+    if(_firstRenderDone&&currentRole==='warmindo')_scheduleRender();
+  });
+  var h8=refs.lunasHistory.on('value',function(s){
+    cache.lunasHistory=s.exists()?(s.val()||{}):{};
+    if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');
+    if(_firstRenderDone&&currentRole==='karyawan')_scheduleRender();
+  });
+  var h9=refs.lunasBayar.on('value',function(s){
+    cache.lunasBayar=s.exists()?(s.val()||{}):{};
+    if(currentRole==='admin'&&activeAdminTab==='tagihan')renderAdminTab('tagihan');
+    if(_firstRenderDone&&currentRole==='karyawan')_scheduleRender();
+  });
   var h10=refs.chatPesan.on('value',function(s){
     var newChat=s.exists()?(s.val()||{}):{};
     // Deteksi pesan baru untuk karyawan yang sedang login
